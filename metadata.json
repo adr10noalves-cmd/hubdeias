@@ -1,0 +1,7 @@
+{
+  "name": "HUB 2.0 — Central Estratégica de IAs",
+  "description": "HUB ESTRATÉGICO DE IAs — Central Operacional de Inteligência Artificial com motor Groq, Comando Natural, Recomendação por objetivo, Gerador de Prompts, Comparação técnica, Descoberta e Pipelines Estratégicos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

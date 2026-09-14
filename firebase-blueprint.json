@@ -1,0 +1,50 @@
+{
+  "entities": {
+    "ias": {
+      "title": "Catálogo de Ferramentas de IA",
+      "description": "Coleção de inteligências artificiais com metadados estratégicos, notas e fichas operacionais",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "specialty": { "type": "string" },
+        "differential": { "type": "string" },
+        "level": { "type": "string" },
+        "difficulty": { "type": "string" },
+        "pricing": { "type": "string" },
+        "pricingDetails": { "type": "string" },
+        "whatIsIt": { "type": "string" },
+        "whatIsItFor": { "type": "string" },
+        "bestTasks": { "type": "array", "items": { "type": "string" } },
+        "beginnerTip": { "type": "string" },
+        "link": { "type": "string" },
+        "scores": { "type": "object" },
+        "paraQueServe": { "type": "string" },
+        "quandoUsar": { "type": "string" },
+        "quandoNaoUsar": { "type": "string" },
+        "melhorPara": { "type": "string" },
+        "pontosFortes": { "type": "string" },
+        "limitacoes": { "type": "string" },
+        "exemploPrompt": { "type": "string" },
+        "observacaoEstrategica": { "type": "string" },
+        "sourceType": { "type": "string" },
+        "discoveredAt": { "type": "string" },
+        "lastValidated": { "type": "string" },
+        "pricingType": { "type": "string" },
+        "qualityScore": { "type": "number" },
+        "whyDiscovered": { "type": "string" },
+        "whyBetter": { "type": "string" },
+        "validationStatus": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "category", "link"]
+    }
+  },
+  "firestore": {
+    "/ias/{iaId}": {
+      "entity": "ias",
+      "description": "Catálogo público compartilhado de inteligências artificiais"
+    }
+  }
+}

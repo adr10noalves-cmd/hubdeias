@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Catálogo compartilhado de IAs
+    match /ias/{iaId} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}
