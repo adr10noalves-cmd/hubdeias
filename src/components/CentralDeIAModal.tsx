@@ -24,7 +24,6 @@ import {
   Layers,
   ChevronRight,
   ShieldCheck,
-  Wrench,
 } from 'lucide-react';
 import {
   IAItem,
@@ -86,13 +85,9 @@ export const CentralDeIAModal: React.FC<CentralDeIAModalProps> = ({
   // 3. CRIAR PROMPT
   const [promptObjective, setPromptObjective] = useState('');
   const [promptTargetIA, setPromptTargetIA] = useState<string>(ias[0]?.name || 'Claude 3.5 Sonnet');
-  const [promptLevel, setPromptLevel] = useState<'Iniciante' | 'Intermediário' | 'Avançado' | 'Básico' | 'Profissional' | 'Especialista'>('Profissional');
+  const [promptLevel, setPromptLevel] = useState<'Iniciante' | 'Intermediário' | 'Avançado'>('Intermediário');
   const [promptLanguage, setPromptLanguage] = useState<'pt' | 'en'>('pt');
-  const [promptContext, setPromptContext] = useState('');
-  const [promptConstraints, setPromptConstraints] = useState('');
   const [promptDesiredResult, setPromptDesiredResult] = useState('');
-  const [refinementInput, setRefinementInput] = useState('');
-  const [isRefining, setIsRefining] = useState(false);
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [generatedPromptResult, setGeneratedPromptResult] = useState<PromptGenerationResult | null>(null);
   const [isEditingPrompt, setIsEditingPrompt] = useState(false);
@@ -234,38 +229,12 @@ export const CentralDeIAModal: React.FC<CentralDeIAModalProps> = ({
         level: promptLevel,
         desiredResult: promptDesiredResult,
         language: promptLanguage,
-        originalPrompt: promptObjective,
-        context: promptContext,
-        constraints: promptConstraints,
       });
       setGeneratedPromptResult(res);
       setEditablePromptText(res.prompt);
       setIsEditingPrompt(false);
     } finally {
       setIsGeneratingPrompt(false);
-    }
-  };
-
-  const handleRefinePrompt = async () => {
-    if (!refinementInput.trim() || !generatedPromptResult) return;
-    setIsRefining(true);
-    try {
-      const res = await generatePrompt({
-        objective: promptObjective,
-        targetIA: promptTargetIA,
-        level: promptLevel,
-        desiredResult: promptDesiredResult,
-        language: promptLanguage,
-        originalPrompt: generatedPromptResult.originalPrompt || promptObjective,
-        context: promptContext,
-        constraints: promptConstraints,
-        refinementInstruction: refinementInput,
-      });
-      setGeneratedPromptResult(res);
-      setEditablePromptText(res.prompt);
-      setRefinementInput('');
-    } finally {
-      setIsRefining(false);
     }
   };
 
@@ -682,7 +651,7 @@ export const CentralDeIAModal: React.FC<CentralDeIAModalProps> = ({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
                   {/* IA DESTINO */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-300 mb-1.5">
@@ -727,74 +696,59 @@ export const CentralDeIAModal: React.FC<CentralDeIAModalProps> = ({
                       onChange={(e) => setPromptLevel(e.target.value as any)}
                       className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white focus:border-cyan-400 outline-none"
                     >
-                      <option value="Básico">Básico (simples e direto)</option>
-                      <option value="Profissional">Profissional (estruturado)</option>
-                      <option value="Especialista">Especialista (rigor técnico)</option>
+                      <option value="Iniciante">Iniciante (didático e guiado)</option>
+                      <option value="Intermediário">Intermediário (focado e estruturado)</option>
+                      <option value="Avançado">Avançado (rigor técnico de elite)</option>
                     </select>
                   </div>
 
-                  {/* CONTEXTO (OPCIONAL) */}
+                  {/* RESULTADO DESEJADO */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                      CONTEXTO (Opcional):
+                      RESULTADO DESEJADO:
                     </label>
                     <input
                       type="text"
-                      value={promptContext}
-                      onChange={(e) => setPromptContext(e.target.value)}
-                      placeholder="Ex: Empresa de logística..."
-                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white focus:border-cyan-400 outline-none"
-                    />
-                  </div>
-
-                  {/* RESTRIÇÕES (OPCIONAL) */}
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                      RESTRIÇÕES (Opcional):
-                    </label>
-                    <input
-                      type="text"
-                      value={promptConstraints}
-                      onChange={(e) => setPromptConstraints(e.target.value)}
-                      placeholder="Ex: Sem jargões, máx 500 palavras..."
+                      value={promptDesiredResult}
+                      onChange={(e) => setPromptDesiredResult(e.target.value)}
+                      placeholder="Ex: Tabela, Código sem bugs..."
                       className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white focus:border-cyan-400 outline-none"
                     />
                   </div>
                 </div>
 
-                {/* PROMPT ORIGINAL / OBJETIVO */}
+                {/* OBJETIVO */}
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
-                    <span>PROMPT ORIGINAL / OBJETIVO:</span>
-                    <span className="text-[11px] text-cyan-400 font-normal">Escreva qualquer pedido simples ou incompleto</span>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    OBJETIVO:
                   </label>
                   <textarea
                     value={promptObjective}
                     onChange={(e) => setPromptObjective(e.target.value)}
-                    placeholder="Ex: crie um sistema de controle de documentos..."
+                    placeholder="Escreva livremente o que deseja (ex: quero criar um sistema para minha empresa, quero analisar um contrato de prestação de serviços...)"
                     rows={3}
-                    className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 focus:border-cyan-400 text-sm text-white placeholder-slate-500 outline-none font-mono"
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-900 border border-slate-700 focus:border-cyan-400 text-sm text-white placeholder-slate-500 outline-none"
                   />
                 </div>
 
                 <div className="flex items-center justify-between pt-2">
                   <span className="text-[11px] text-slate-400">
-                    A Groq analisa seu pedido, identifica lacunas e constrói um prompt profissional adaptado à IA destino.
+                    O Hub formula automaticamente o papel da IA, instruções, restrições e critérios de qualidade.
                   </span>
                   <button
                     onClick={handleExecuteGeneratePrompt}
                     disabled={isGeneratingPrompt || !promptObjective.trim()}
-                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_0_15px_rgba(6,182,212,0.3)]"
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm transition-all disabled:opacity-50 flex items-center gap-2 shadow-[0_0_15px_rgba(6,182,212,0.3)]"
                   >
                     {isGeneratingPrompt ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>Analisando e aprimorando com Groq...</span>
+                        <span>Otimizando prompt com Groq...</span>
                       </>
                     ) : (
                       <>
                         <Sparkles className="w-4 h-4" />
-                        <span>✨ APRIMORAR COM GROQ</span>
+                        <span>✨ GERAR PROMPT</span>
                       </>
                     )}
                   </button>
@@ -803,12 +757,12 @@ export const CentralDeIAModal: React.FC<CentralDeIAModalProps> = ({
 
               {/* Resultado do Prompt Gerado */}
               {generatedPromptResult && (
-                <div className="bg-slate-850 border border-cyan-500/40 rounded-2xl p-5 space-y-5 animate-fadeIn">
+                <div className="bg-slate-850 border border-cyan-500/40 rounded-2xl p-5 space-y-4 animate-fadeIn">
                   <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-800">
                     <div>
                       <h4 className="text-sm font-bold text-white flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                        <span>PROMPT APRIMORADO POR GROQ • Otimizado para {generatedPromptResult.targetIA}</span>
+                        <span>PROMPT GERADO • Otimizado para {generatedPromptResult.targetIA}</span>
                       </h4>
                       <p className="text-xs text-slate-400 mt-0.5">
                         Role: {generatedPromptResult.role} • Nível: {generatedPromptResult.level}
@@ -830,12 +784,12 @@ export const CentralDeIAModal: React.FC<CentralDeIAModalProps> = ({
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 hover:text-white border border-slate-700 transition-colors"
                       >
                         <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-                        <span>🔄 GERAR NOVAMENTE</span>
+                        <span>🔄 REFAZER</span>
                       </button>
 
                       <button
                         onClick={handleCopyPrompt}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-all shadow-[0_0_15px_rgba(6,182,212,0.4)]"
+                        className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-all shadow-[0_0_15px_rgba(6,182,212,0.4)]"
                       >
                         {hasCopiedPrompt ? (
                           <>
@@ -849,101 +803,49 @@ export const CentralDeIAModal: React.FC<CentralDeIAModalProps> = ({
                           </>
                         )}
                       </button>
-
-                      <button
-                        onClick={() => {
-                          handleCopyPrompt();
-                          setCommandFeedback('Prompt copiado e pronto para uso!');
-                          setTimeout(() => setCommandFeedback(null), 3000);
-                        }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs transition-all"
-                      >
-                        <span>🚀 USAR PROMPT</span>
-                      </button>
                     </div>
                   </div>
 
-                  {/* VISÃO LADO A LADO: ORIGINAL vs APRIMORADO */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                        PROMPT ORIGINAL
-                      </span>
-                      <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 font-mono min-h-[90px] max-h-48 overflow-y-auto">
-                        {generatedPromptResult.originalPrompt || promptObjective}
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <span className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5" />
-                        ✨ PROMPT APRIMORADO
-                      </span>
-                      {isEditingPrompt ? (
-                        <textarea
-                          value={editablePromptText}
-                          onChange={(e) => setEditablePromptText(e.target.value)}
-                          rows={8}
-                          className="w-full p-3.5 rounded-xl bg-slate-900 border border-cyan-400/50 text-xs font-mono text-slate-200 focus:outline-none"
-                        />
-                      ) : (
-                        <pre className="p-3.5 rounded-xl bg-slate-900 border border-cyan-500/30 text-xs font-mono text-cyan-100 whitespace-pre-wrap leading-relaxed overflow-y-auto max-h-48">
-                          {editablePromptText || generatedPromptResult.prompt}
-                        </pre>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* 🔎 O QUE FOI MELHORADO */}
-                  {generatedPromptResult.improvements && generatedPromptResult.improvements.length > 0 && (
-                    <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 space-y-2">
-                      <h5 className="text-xs font-bold text-cyan-300 flex items-center gap-2">
-                        <Zap className="w-3.5 h-3.5" />
-                        <span>🔎 O QUE FOI MELHORADO</span>
-                      </h5>
-                      <div className="flex flex-wrap gap-2">
-                        {generatedPromptResult.improvements.map((imp, idx) => (
-                          <span key={idx} className="text-xs px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700">
-                            {imp}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+                  {/* Prompt Text / Textarea */}
+                  {isEditingPrompt ? (
+                    <textarea
+                      value={editablePromptText}
+                      onChange={(e) => setEditablePromptText(e.target.value)}
+                      rows={12}
+                      className="w-full p-4 rounded-xl bg-slate-900 border border-cyan-400/50 text-xs sm:text-sm font-mono text-slate-200 focus:outline-none"
+                    />
+                  ) : (
+                    <pre className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 text-xs sm:text-sm font-mono text-cyan-100 whitespace-pre-wrap leading-relaxed overflow-x-auto max-h-96">
+                      {editablePromptText || generatedPromptResult.prompt}
+                    </pre>
                   )}
 
-                  {/* 🔧 REFINAR PROMPT */}
-                  <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-3">
-                    <label className="block text-xs font-bold text-white flex items-center gap-2">
-                      <Wrench className="w-3.5 h-3.5 text-amber-400" />
-                      <span>🔧 REFINAR PROMPT (Ajuste com linguagem natural)</span>
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={refinementInput}
-                        onChange={(e) => setRefinementInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') handleRefinePrompt(); }}
-                        placeholder="Ex: 'deixe mais técnico', 'faça mais curto', 'adicione critérios de segurança'..."
-                        className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white focus:border-cyan-400 outline-none"
-                      />
-                      <button
-                        onClick={handleRefinePrompt}
-                        disabled={isRefining || !refinementInput.trim()}
-                        className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-all disabled:opacity-50 flex items-center gap-1.5"
-                      >
-                        {isRefining ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                        <span>Refinar</span>
-                      </button>
-                    </div>
-                  </div>
+                  {/* Quality criteria tags & Improvements performed */}
+                  <div className="space-y-3">
+                    {generatedPromptResult.qualityCriteria && (
+                      <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-400 flex items-center justify-between">
+                        <span>Critério de Qualidade: <strong className="text-slate-200">{generatedPromptResult.qualityCriteria}</strong></span>
+                        <span className="text-[11px] text-cyan-400">Pronto para colar no {generatedPromptResult.targetIA}</span>
+                      </div>
+                    )}
 
-                  {/* Quality criteria */}
-                  {generatedPromptResult.qualityCriteria && (
-                    <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-400 flex items-center justify-between">
-                      <span>Critério de Qualidade: <strong className="text-slate-200">{generatedPromptResult.qualityCriteria}</strong></span>
-                      <span className="text-[11px] text-cyan-400">Pronto para colar no {generatedPromptResult.targetIA}</span>
-                    </div>
-                  )}
+                    {generatedPromptResult.improvements && generatedPromptResult.improvements.length > 0 && (
+                      <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
+                        <div className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          <span>🔎 APRIMORAMENTOS REALIZADOS PELA ENGENHARIA DE GROQ:</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                          {generatedPromptResult.improvements.map((imp, idx) => (
+                            <div key={idx} className="text-xs text-cyan-300 flex items-center gap-2 bg-slate-850/80 px-3 py-1.5 rounded-lg border border-slate-800">
+                              <span className="text-emerald-400 font-bold">✓</span>
+                              <span>{imp.replace(/^[✓\-\*]\s*/, '')}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

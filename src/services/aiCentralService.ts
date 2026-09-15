@@ -231,14 +231,9 @@ export async function generatePrompt(params: {
   level?: string;
   desiredResult?: string;
   language?: 'pt' | 'en';
-  originalPrompt?: string;
-  context?: string;
-  constraints?: string;
-  mode?: string;
-  refinementInstruction?: string;
 }): Promise<PromptGenerationResult> {
   const targetIA = params.targetIA || 'Claude 3.5 Sonnet';
-  const level = params.level || 'Profissional';
+  const level = (params.level as any) || 'Intermediário';
   const language = params.language || 'pt';
 
   try {
@@ -248,27 +243,29 @@ export async function generatePrompt(params: {
       level,
       desiredResult: params.desiredResult,
       language,
-      originalPrompt: params.originalPrompt || params.objective,
-      context: params.context,
-      constraints: params.constraints,
-      mode: params.mode,
-      refinementInstruction: params.refinementInstruction,
     });
     if (res?.prompt) {
       return {
         prompt: res.prompt,
         objective: res.objective || params.objective,
         targetIA: res.targetIA || targetIA,
-        level: (res.level || level) as any,
+        level: (res.level as any) || level,
         desiredResult: res.desiredResult || params.desiredResult,
-        role: res.role || 'Especialista Sênior em Engenharia de Prompts',
+        role: res.role || 'Especialista Sênior',
         instructions: Array.isArray(res.instructions) ? res.instructions : [],
         constraints: Array.isArray(res.constraints) ? res.constraints : [],
-        responseFormat: res.responseFormat || 'Estrutura Markdown estruturada',
-        qualityCriteria: res.qualityCriteria || 'Rigor técnico, clareza e ausência de alucinações',
-        originalPrompt: res.originalPrompt || params.originalPrompt || params.objective,
-        improvements: Array.isArray(res.improvements) ? res.improvements : ['✓ objetivo esclarecido', '✓ contexto estruturado', '✓ requisitos organizados'],
-        missingInformation: Array.isArray(res.missingInformation) ? res.missingInformation : [],
+        responseFormat: res.responseFormat || 'Estrutura Markdown limpa',
+        qualityCriteria: res.qualityCriteria || 'Rigor técnico e ausência de alucinações',
+        summary: res.summary || 'Prompt profissional otimizado para máxima performance.',
+        improvements: Array.isArray(res.improvements) && res.improvements.length > 0 ? res.improvements : [
+          '✓ objetivo estruturado',
+          '✓ contexto operacional organizado',
+          '✓ requisitos e restrições estabelecidos',
+          '✓ critérios de qualidade adicionados',
+          '✓ prompt adaptado à IA destino'
+        ],
+        needsClarification: res.needsClarification || false,
+        clarificationQuestion: res.clarificationQuestion || '',
       };
     }
   } catch (err) {
@@ -276,25 +273,23 @@ export async function generatePrompt(params: {
   }
 
   // Fallback local determinístico de alta qualidade
-  const role = `Especialista Sênior em Engenharia de Soluções e ${(params.objective || '').slice(0, 30)}`;
+  const role = `Especialista Sênior em Engenharia de Soluções e ${params.objective.slice(0, 30)}`;
   const instructions = [
     `Analise profundamente o objetivo central: "${params.objective}".`,
     `Construa uma resposta lógica, clara e dividida em fases de execução.`,
     `Apresente exemplos práticos diretamente aplicáveis.`,
   ];
-  const constraintsList = [
+  const constraints = [
     'Não use jargões vagos ou clichês vazios.',
     'Forneça dados concretos e passos acionáveis.',
     'Se houver incertezas ou pré-requisitos, indique expressamente.',
   ];
 
   const fullPrompt = `# CONTEXTO & IDENTIDADE
-Você é um ${role}. Sua missão é conduzir o usuário com rigor técnico e pragmatismo para a IA ${targetIA}.
+Você é um ${role}. Sua missão é conduzir o usuário com rigor técnico e pragmatismo.
 
 # OBJETIVO PRINCIPAL
 ${params.objective}
-${params.context ? `\n# CONTEXTO FORNECIDO\n${params.context}` : ''}
-${params.constraints ? `\n# RESTRIÇÕES\n${params.constraints}` : ''}
 
 # DIRETRIZES DE EXECUÇÃO
 1. ${instructions[0]}
@@ -302,13 +297,15 @@ ${params.constraints ? `\n# RESTRIÇÕES\n${params.constraints}` : ''}
 3. ${instructions[2]}
 
 # RESTRIÇÕES OBRIGATÓRIAS
-- ${constraintsList[0]}
-- ${constraintsList[1]}
+- ${constraints[0]}
+- ${constraints[1]}
+- ${constraints[2]}
 
 # FORMATO ESPERADO DA RESPOSTA
-- Visão executiva inicial
+- Visão executiva inicial (1 parágrafo curto)
 - Plano tático estruturado em etapas sequenciais
-- Entregáveis práticos
+- Entregáveis práticos e código/artefatos quando aplicável
+- Validação e critérios de conclusão
 
 # RESULTADO DESEJADO
 ${params.desiredResult || 'Entrega com máxima profundidade e aplicabilidade imediata.'}`;
@@ -317,16 +314,13 @@ ${params.desiredResult || 'Entrega com máxima profundidade e aplicabilidade ime
     prompt: fullPrompt,
     objective: params.objective,
     targetIA,
-    level: level as any,
+    level,
     desiredResult: params.desiredResult,
     role,
     instructions,
-    constraints: constraintsList,
+    constraints,
     responseFormat: 'Markdown estruturado com seções executivas',
     qualityCriteria: 'Clareza, aplicabilidade imediata e zero respostas genéricas',
-    originalPrompt: params.originalPrompt || params.objective,
-    improvements: ['✓ objetivo esclarecido', '✓ contexto estruturado', '✓ requisitos organizados', '✓ formato de resposta definido'],
-    missingInformation: [],
   };
 }
 
