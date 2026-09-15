@@ -131,13 +131,16 @@ export interface PromptGenerationResult {
   prompt: string;
   objective: string;
   targetIA: string;
-  level: 'Iniciante' | 'Intermediário' | 'Avançado';
+  level: 'Iniciante' | 'Intermediário' | 'Avançado' | 'Básico' | 'Profissional' | 'Especialista';
   desiredResult?: string;
   role: string;
   instructions: string[];
   constraints: string[];
   responseFormat: string;
   qualityCriteria: string;
+  originalPrompt?: string;
+  improvements?: string[];
+  missingInformation?: string[];
 }
 
 export interface ComparisonDimensionScore {
