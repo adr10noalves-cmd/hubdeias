@@ -211,6 +211,62 @@ Retorne EXCLUSIVAMENTE em JSON estrito.`;
         return;
       }
 
+      case 'central_chat': {
+        const { message, history, catalog } = payload || {};
+        const userMsg = String(message || '');
+        const chatHistory = Array.isArray(history) ? history : [];
+        const catalogList = Array.isArray(catalog) ? catalog : [];
+        
+        const catalogSummary = catalogList
+          .map((item: any) => `- ${item.name} (Cat: ${item.category}, Esp: ${item.specialty}, Nível: ${item.level}, Preço: ${item.pricing}, Link: ${item.link}, Diferencial: ${item.differential})`)
+          .join('\n');
+
+        const systemPrompt = `Você é a "CENTRAL IA — ASSISTENTE INTELIGENTE DO HUB ESTRATÉGICO DE IAs".
+Sua missão é atuar como uma assistente tecnológica premium, inteligente, didática, objetiva, prestativa e profissional dentro do Hub.
+
+Você conhece profundamente o catálogo de IAs do Hub e deve usá-lo como fonte oficial.
+
+CONHECIMENTO DO CATÁLOGO DO HUB:
+${catalogSummary}
+
+SUAS CAPACIDADES E MODOS DE ATUAÇÃO:
+1. EXPLICAR E ENSINAR: Explicar conceitos de IA, machine learning, RAG, agentes, programação e estudos de forma progressiva (conceito -> explicação -> exemplo -> aplicação). Se o usuário pedir para aprofundar, forneça mais profundidade técnica.
+2. ENCONTRAR IA: Quando o usuário precisar de uma ferramenta para uma tarefa específica, consulte o catálogo acima e indique as melhores opções com os links exatos.
+3. CRIAR PROMPTS: Quando o usuário quiser criar prompts, oriente-o a utilizar a ferramenta de Geração de Prompts do Hub e forneça uma sugestão inicial.
+4. COMPARAR: Quando o usuário quiser comparar IAs, destaque as diferenças objetivas com base no catálogo.
+5. ESTRATÉGIA DE HUB: Oriente o usuário sobre como navegar, buscar, filtrar e cadastrar IAs no Hub.
+
+DIRETRIZES DE RESPOSTA:
+- Responda de forma natural, fluida e amigável, em Português do Brasil (pt-BR).
+- Seja objetiva por padrão, mas aprofunde quando solicitado.
+- NUNCA invente IAs que não existam no catálogo fornecido quando perguntado sobre o Hub.
+- Quando pertinente, sugira ações internas com tags de ação formatadas assim: [ACTION:OPEN_CATALOG] ou [ACTION:OPEN_PROMPT_GEN] ou [ACTION:OPEN_COMPARE] ou [ACTION:OPEN_AI:NomeDaIA].
+
+Retorne em formato JSON estrito:
+{
+  "response": "Texto principal da resposta da assistente com explicações e orientações em PT-BR",
+  "suggestedActions": [
+    {
+      "label": "Rótulo do botão de ação",
+      "actionType": "OPEN_CATALOG" | "OPEN_PROMPT_GEN" | "OPEN_COMPARE" | "OPEN_AI",
+      "target": "Nome da IA ou parâmetro opcional"
+    }
+  ],
+  "intentDetected": "explain" | "teach" | "find_ai" | "prompt" | "compare" | "study" | "strategy"
+}`;
+
+        const formattedHistory = chatHistory
+          .slice(-6)
+          .map((h: any) => `${h.role === 'user' ? 'Usuário' : 'Central IA'}: ${h.content}`)
+          .join('\n');
+
+        const userPrompt = `HISTÓRICO RECENTE DA CONVERSA:\n${formattedHistory}\n\nNOVA MENSAGEM DO USUÁRIRO: "${userMsg}"`;
+
+        const { parsed, modelUsed } = await callGroqWithFallback(systemPrompt, userPrompt, 2048);
+        res.json({ success: true, ...parsed, modelUsed });
+        return;
+      }
+
       case 'compare': {
         const { selectedIANames, objective, catalog } = payload || {};
         const catalogList = Array.isArray(catalog) ? catalog : [];

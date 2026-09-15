@@ -16,6 +16,7 @@ import { IADetailModal } from './components/IADetailModal';
 import { FichaOperacionalModal } from './components/FichaOperacionalModal';
 import { StrategicMotorModal } from './components/StrategicMotorModal';
 import { CentralDeIAModal } from './components/CentralDeIAModal';
+import { CentralAICoordinator } from './components/CentralAICoordinator';
 import { categoryIcons, resolveIADetails } from './utils/helpers';
 import { Layers, Sparkles } from 'lucide-react';
 import {
@@ -634,6 +635,18 @@ export default function App() {
         compareIds={compareIds}
         onToggleCompare={handleToggleCompare}
         onClearCompare={handleClearCompare}
+      />
+
+      {/* 🤖 CENTRAL IA — ASSISTENTE INTELIGENTE DO HUB (V2.7) */}
+      <CentralAICoordinator
+        catalog={ias}
+        onOpenCatalogWithFilter={(cat) => {
+          setSelectedCategory(cat);
+          window.scrollTo({ top: 580, behavior: 'smooth' });
+        }}
+        onOpenPromptGen={() => setIsCentralIAOpen(true)}
+        onOpenCompare={() => setIsCompareOpen(true)}
+        onOpenAIDetail={(ai) => handleOpenDetail(ai)}
       />
     </div>
   );

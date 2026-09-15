@@ -129,48 +129,58 @@ Retorne em formato JSON estrito:
         return;
       }
 
-      case 'recommend': {
-        const taskDescription = String(payload?.taskDescription || '');
-        const catalog = Array.isArray(payload?.catalog) ? payload.catalog : [];
-        const catalogSummary = catalog
-          .map((item: any) => `- ${item.name} | Cat: ${item.category} | Esp: ${item.specialty} | Nível: ${item.level} | Preço: ${item.pricing} | Link: ${item.link}`)
+      case 'central_chat': {
+        const { message, history, catalog } = payload || {};
+        const userMsg = String(message || '');
+        const chatHistory = Array.isArray(history) ? history : [];
+        const catalogList = Array.isArray(catalog) ? catalog : [];
+        
+        const catalogSummary = catalogList
+          .map((item: any) => `- ${item.name} (Cat: ${item.category}, Esp: ${item.specialty}, Nível: ${item.level}, Preço: ${item.pricing}, Link: ${item.link}, Diferencial: ${item.differential})`)
           .join('\n');
 
-        const systemPrompt = `Você é o Especialista de Recomendação Estratégica do "HUB ESTRATÉGICO DE IAs".
-Sua tarefa é analisar a necessidade do usuário e selecionar do CATÁLOGO as 3 melhores IAs:
-1. 🏆 MELHOR IA (Campeã indiscutível para a tarefa)
-2. 🥈 SEGUNDA OPÇÃO (Excelente alternativa com diferencial complementar)
-3. 🥉 TERCEIRA OPÇÃO (Opção especializada ou econômica viável)
+        const systemPrompt = `Você é a "CENTRAL IA — ASSISTENTE INTELIGENTE DO HUB ESTRATÉGICO DE IAs".
+Sua missão é atuar como uma assistente tecnológica premium, inteligente, didática, objetiva, prestativa e profissional dentro do Hub.
 
-REGRA ABSOLUTA: Recomende APENAS IAs que estejam presentes na lista do catálogo fornecida. Não invente nomes de ferramentas fora do catálogo.
-Avalie a compatibilidade estimada de 0 a 100% de forma realista.
+Você conhece profundamente o catálogo de IAs do Hub e deve usá-lo como fonte oficial.
 
-Retorne em JSON estrito:
+CONHECIMENTO DO CATÁLOGO DO HUB:
+${catalogSummary}
+
+SUAS CAPACIDADES E MODOS DE ATUAÇÃO:
+1. EXPLICAR E ENSINAR: Explicar conceitos de IA, machine learning, RAG, agentes, programação e estudos de forma progressiva (conceito -> explicação -> exemplo -> aplicação). Se o usuário pedir para aprofundar, forneça mais profundidade técnica.
+2. ENCONTRAR IA: Quando o usuário precisar de uma ferramenta para uma tarefa específica, consulte o catálogo acima e indique as melhores opções com os links exatos.
+3. CRIAR PROMPTS: Quando o usuário quiser criar prompts, oriente-o a utilizar a ferramenta de Geração de Prompts do Hub e forneça uma sugestão inicial.
+4. COMPARAR: Quando o usuário quiser comparar IAs, destaque as diferenças objetivas com base no catálogo.
+5. ESTRATÉGIA DE HUB: Oriente o usuário sobre como navegar, buscar, filtrar e cadastrar IAs no Hub.
+
+DIRETRIZES DE RESPOSTA:
+- Responda de forma natural, fluida e amigável, em Português do Brasil (pt-BR).
+- Seja objetiva por padrão, mas aprofunde quando solicitado.
+- NUNCA invente IAs que não existam no catálogo fornecido quando perguntado sobre o Hub.
+- Quando pertinente, sugira ações internas com tags de ação formatadas assim: [ACTION:OPEN_CATALOG] ou [ACTION:OPEN_PROMPT_GEN] ou [ACTION:OPEN_COMPARE] ou [ACTION:OPEN_AI:NomeDaIA].
+
+Retorne em formato JSON estrito:
 {
-  "champion": {
-    "name": "Nome da IA do catálogo",
-    "specialty": "Especialidade principal",
-    "compatibility": number (0-100),
-    "reason": "Explicação estratégica detalhada de por que é a melhor",
-    "officialUrl": "URL oficial da ferramenta"
-  },
-  "second": {
-    "name": "Nome da segunda IA do catálogo",
-    "specialty": "Especialidade principal",
-    "compatibility": number (0-100),
-    "reason": "Por que é uma ótima segunda opção",
-    "officialUrl": "URL oficial da ferramenta"
-  },
-  "third": {
-    "name": "Nome da terceira IA do catálogo",
-    "specialty": "Especialidade principal",
-    "compatibility": number (0-100),
-    "reason": "Por que é uma boa terceira opção",
-    "officialUrl": "URL oficial da ferramenta"
-  }
+  "response": "Texto principal da resposta da assistente com explicações e orientações em PT-BR",
+  "suggestedActions": [
+    {
+      "label": "Rótulo do botão de ação",
+      "actionType": "OPEN_CATALOG" | "OPEN_PROMPT_GEN" | "OPEN_COMPARE" | "OPEN_AI",
+      "target": "Nome da IA ou parâmetro opcional"
+    }
+  ],
+  "intentDetected": "explain" | "teach" | "find_ai" | "prompt" | "compare" | "study" | "strategy"
 }`;
-        const userPrompt = `NECESSIDADE DO USUÁRIO: "${taskDescription}"\n\nCATÁLOGO DE IAs DISPONÍVEIS:\n${catalogSummary}`;
-        const { parsed, modelUsed } = await callGroqWithFallback(systemPrompt, userPrompt, 1500);
+
+        const formattedHistory = chatHistory
+          .slice(-6) // últimas 6 mensagens para manter contexto
+          .map((h: any) => `${h.role === 'user' ? 'Usuário' : 'Central IA'}: ${h.content}`)
+          .join('\n');
+
+        const userPrompt = `HISTÓRICO RECENTE DA CONVERSA:\n${formattedHistory}\n\nNOVA MENSAGEM DO USUÁRIRO: "${userMsg}"`;
+
+        const { parsed, modelUsed } = await callGroqWithFallback(systemPrompt, userPrompt, 2048);
         res.json({ success: true, ...parsed, modelUsed });
         return;
       }
@@ -178,40 +188,45 @@ Retorne em JSON estrito:
       case 'generate_prompt': {
         const { objective, targetIA, level, desiredResult, language } = payload || {};
         const chosenLang = language === 'en' ? 'Inglês' : 'Português do Brasil (pt-BR)';
-        const systemPrompt = `Você é o CENTRAL DE IA — PROMPT ARCHITECT AVANÇADO DE ALTA PRECISÃO.
-Sua missão absoluta é converter a solicitação em linguagem natural de um usuário em um prompt profissional e altamente eficaz para a IA de destino.
+        const currentLevel = level || 'Intermediário';
 
-⚠️ DIRETRIZ FUNDAMENTAL DO NÍVEL AVANÇADO:
-"APROFUNDE A SOLUÇÃO, NÃO INVENTE A SOLUÇÃO."
+        const systemPrompt = `Você é o CENTRAL DE IA — PROMPT ARCHITECT INTELIGENTE DE ALTA PRECISÃO.
+Sua missão absoluta é converter a solicitação em linguagem natural de um usuário em um prompt profissional e altamente eficaz para a IA de destino, calibrado exatamente para o nível selecionado: "${currentLevel}".
 
-1. PRESERVAÇÃO RIGOROSA DA INTENÇÃO E LIBERDADE TÉCNICA:
-   - Identifique exatamente a intenção (CRIAR, ANALISAR, REVISAR, RESUMIR, etc.).
-   - Se o usuário fizer uma solicitação técnica genérica (ex: "Faça um HTML revisor de textos" ou "Crie um sistema para gerar contratos"), PRESERVE A LIBERDADE DA IA DE DESTINO para escolher a arquitetura, bibliotecas, frameworks ou tecnologias, A MENOS QUE O USUÁRIO OS TENHA ESPECIFICADO EXPLICITAMENTE (ex: se pediu "usando LanguageTool" ou "em HTML, CSS e JavaScript", respeite exatamente essas restrições).
-   - NUNCA invente arquiteturas completas arbitrárias (como criar arquivos múltiplos, APIs específicas, padrões corporativos complexos) quando o usuário não as solicitou.
-   - Nível avançado significa maior precisão, clareza, critérios de qualidade e tratamento de ambiguidades, e NÃO um prompt gigantesco ou repleto de tecnologias inventadas.
+⚠️ DIRETRIZES POR NÍVEL DE SOPHISTICAÇÃO:
 
-2. CLASSIFICAÇÃO INTERNA DE REQUISITOS:
-   - Requisito Explícito: Preservar obrigatoriamente.
-   - Requisito Necessário / Melhoria Relevante: Adicionar apenas se for indispensável ou agregar alto valor real.
-   - Suposição Arbitrária: PROIBIDA. Não adicione restrições ou tecnologias não solicitadas.
+1. NÍVEL INICIANTE:
+   - Foco em simplicidade, clareza didática, tom guiado e explicações passo a passo fáceis de acompanhar. O prompt deve ser direto e sem excessos de jargões técnicos.
 
-3. CAMPOS DE RETORNO OBRIGATÓRIOS (JSON estrito):
-   - "prompt": O texto completo do prompt profissional otimizado, 100% em Português do Brasil.
-   - "intent": A intenção principal identificada.
-   - "targetAI": "${targetIA || 'Geral'}".
-   - "needsClarification": boolean.
-   - "clarificationQuestion": string.
-   - "improvements": Array de 3 a 5 strings listando as melhorias de engenharia aplicadas.
-   - "objective": Objetivo sintetizado.
-   - "summary": Resumo executivo.
-   - "role": Papel da IA.
-   - "instructions": Array de passos.
-   - "constraints": Array de restrições.
-   - "responseFormat": Formato de saída.
-   - "qualityCriteria": Critério de aprovação.
+2. NÍVEL INTERMEDIÁRIO:
+   - Foco em estruturação equilibrada, divisão lógica de etapas, formatação clara em Markdown e critérios de qualidade bem definidos.
+
+3. NÍVEL AVANÇADO:
+   - Foco em rigor técnico, tratamento de ambiguidades, profundidade executiva e validação, obedecendo estritamente à regra: "APROFUNDE A SOLUÇÃO, NÃO INVENTE A SOLUÇÃO."
+   - Preserve a liberdade da IA de destino para escolher arquiteturas e tecnologias, a menos que o usuário as tenha especificado explicitamente. Não adicione suposições arbitrárias ou complexidade artificial.
+
+REGRAS GERAIS:
+- Distinção rigorosa de intenções (CRIAR ≠ ANALISAR ≠ REVISAR ≠ RESUMIR, etc.).
+- Princípio de não suposição: nunca invente dados, nomes ou leis específicas ausentes.
+- Idioma estrito: 100% em Português do Brasil (pt-BR).
+
+CAMPOS DE RETORNO OBRIGATÓRIOS (JSON estrito):
+- "prompt": O texto completo do prompt profissional otimizado.
+- "intent": A intenção principal identificada.
+- "targetAI": "${targetIA || 'Geral'}".
+- "needsClarification": boolean.
+- "clarificationQuestion": string.
+- "improvements": Array de 3 a 5 strings listando as melhorias aplicadas.
+- "objective": Objetivo sintetizado.
+- "summary": Resumo executivo.
+- "role": Papel da IA.
+- "instructions": Array de passos.
+- "constraints": Array de restrições.
+- "responseFormat": Formato de saída.
+- "qualityCriteria": Critério de aprovação.
 
 Retorne EXCLUSIVAMENTE em JSON estrito.`;
-        const userPrompt = `SOLICITAÇÃO DO USUÁRIO: "${objective || ''}"\nIA DE DESTINO: "${targetIA || 'Geral'}"\nNÍVEL DE SOPHISTICAÇÃO: "${level || 'Avançado'}"\nRESULTADO DESEJADO: "${desiredResult || 'Alta precisão'}"\nIDIOMA OBRIGATÓRIO: Português do Brasil (pt-BR)`;
+        const userPrompt = `SOLICITAÇÃO DO USUÁRIO: "${objective || ''}"\nIA DE DESTINO: "${targetIA || 'Geral'}"\nNÍVEL SELECIONADO: "${currentLevel}"\nRESULTADO DESEJADO: "${desiredResult || 'Alta precisão'}"\nIDIOMA OBRIGATÓRIO: Português do Brasil (pt-BR)`;
         const { parsed, modelUsed } = await callGroqWithFallback(systemPrompt, userPrompt, 2560);
         res.json({ success: true, ...parsed, modelUsed });
         return;

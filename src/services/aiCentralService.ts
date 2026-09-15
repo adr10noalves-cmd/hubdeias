@@ -560,21 +560,72 @@ export async function buildAIStrategy(
   };
 }
 
+// 13. 🤖 CENTRAL IA CHAT ASSISTANT: centralChat()
+export async function centralChat(
+  message: string,
+  history: { role: 'user' | 'assistant'; content: string }[],
+  catalog: IAItem[]
+): Promise<{
+  response: string;
+  suggestedActions: { label: string; actionType: string; target?: string }[];
+  intentDetected: string;
+}> {
+  try {
+    const res = await groqClient('central_chat', { message, history, catalog });
+    if (res && res.response) {
+      return {
+        response: res.response,
+        suggestedActions: Array.isArray(res.suggestedActions) ? res.suggestedActions : [],
+        intentDetected: res.intentDetected || 'explain',
+      };
+    }
+  } catch (err) {
+    console.warn('[centralChat] Groq falhou, acionando fallback inteligente da Central IA:', err);
+  }
+
+  // Fallback local robusto caso a API da Groq falhe
+  const lower = message.toLowerCase();
+  let intent = 'explain';
+  let resp = `Compreendi sua necessidade sobre "${message}". Como sua Central IA, posso ajudar você a navegar pelo Hub, encontrar as melhores ferramentas do catálogo, criar prompts ou aprofundar seus estudos em inteligência artificial.`;
+  let actions: { label: string; actionType: string; target?: string }[] = [];
+
+  if (lower.includes('vídeo') || lower.includes('gerar vídeo')) {
+    intent = 'find_ai';
+    const videoIAs = catalog.filter((i) => i.category.includes('VÍDEO')).slice(0, 3);
+    resp = `Encontrei excelentes ferramentas de vídeo no seu catálogo: ${videoIAs.map((i) => i.name).join(', ')}. Posso abrir o catálogo filtrado para você conferir!`;
+    actions = [{ label: '🎬 Ver IAs de Vídeo', actionType: 'OPEN_CATALOG', target: 'VÍDEO' }];
+  } else if (lower.includes('prompt') || lower.includes('criar prompt')) {
+    intent = 'prompt';
+    resp = `Posso ajudar você a transformar qualquer ideia simples em um prompt profissional de alto nível através da nossa ferramenta de Engenharia de Prompts.`;
+    actions = [{ label: '✨ Gerar Prompt de Alto Nível', actionType: 'OPEN_PROMPT_GEN' }];
+  } else if (lower.includes('comparar') || lower.includes(' vs ')) {
+    intent = 'compare';
+    resp = `Nossa ferramenta de Comparação Tática permite avaliar lado a lado as capacidades, código, raciocínio e adequação de várias IAs.`;
+    actions = [{ label: '⚖️ Comparar IAs', actionType: 'OPEN_COMPARE' }];
+  } else if (lower.includes('estudar') || lower.includes('aprender') || lower.includes('o que é')) {
+    intent = 'teach';
+    resp = `A inteligência artificial generativa e os modelos de linguagem funcionam através de redes neurais treinadas em vastos volumes de dados para prever o próximo token. Quer aprofundar esse conceito com um exemplo prático?`;
+    actions = [{ label: '📚 Ver Guia do Iniciante', actionType: 'OPEN_CATALOG' }];
+  } else {
+    actions = [
+      { label: '📂 Abrir Catálogo', actionType: 'OPEN_CATALOG' },
+      { label: '✨ Gerador de Prompts', actionType: 'OPEN_PROMPT_GEN' },
+      { label: '⚖️ Comparar IAs', actionType: 'OPEN_COMPARE' }
+    ];
+  }
+
+  return {
+    response: resp,
+    suggestedActions: actions,
+    intentDetected: intent,
+  };
+}
+
 // 9. 📚 CONSULTAR HUB: queryCatalog()
 export async function queryCatalog(
   question: string,
   catalog: IAItem[]
 ): Promise<CatalogQueryAnswer> {
-  try {
-    const res = await groqClient('query_catalog', { question, catalog });
-    if (res?.answer) {
-      return res;
-    }
-  } catch (err) {
-    console.warn('[queryCatalog] Groq falhou, consultando catálogo localmente:', err);
-  }
-
-  // Fallback de consulta local
   const lower = question.toLowerCase();
   let matches: IAItem[] = [];
 
