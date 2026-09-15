@@ -176,10 +176,16 @@ Retorne em JSON estrito:
       }
 
       case 'generate_prompt': {
-        const { objective, targetIA, level, desiredResult } = payload || {};
+        const { objective, targetIA, level, desiredResult, language } = payload || {};
+        const chosenLang = language === 'en' ? 'Inglês' : 'Português do Brasil (pt-BR)';
         const systemPrompt = `Você é o Engenheiro Mestre de Prompts da CENTRAL DE COMANDO DE IA.
 Sua função é gerar prompts de altíssimo desempenho, prontos para uso em inteligência artificial.
 O usuário não precisa entender de engenharia de prompt: você estrutura tudo com rigor profissional.
+
+⚠️ REGRA OBRIGATÓRIA DE IDIOMA:
+O prompt gerado no campo "prompt" E todos os campos explicativos (role, instructions, constraints, responseFormat, qualityCriteria) DEVEM OBRIGATORIAMENTE ESTAR EM ${chosenLang}.
+NUNCA gere o texto do prompt em inglês, a menos que o usuário solicite explicitamente "em inglês".
+Todo o corpo do comando, as diretrizes, a persona e os passos devem estar em Português fluente e natural do Brasil.
 
 O prompt gerado deve considerar profundamente:
 - Objetivo do usuário
@@ -190,22 +196,22 @@ O prompt gerado deve considerar profundamente:
 - Formato exato da resposta (tabelas, markdown, código limpo, tópicos)
 - Critérios de qualidade e validação
 
-Se a IA destino for informada (ex: Claude, ChatGPT, DeepSeek, Gemini, Cursor), adapte a sintaxe e melhores práticas daquela IA.
+Se a IA destino for informada (ex: Claude, ChatGPT, DeepSeek, Gemini, Cursor), adapte a sintaxe e melhores práticas daquela IA mantendo SEMPRE em Português do Brasil.
 
 Retorne em JSON estrito:
 {
-  "prompt": "Texto completo, robusto e formatado do prompt profissional pronto para copiar",
-  "objective": "Objetivo sintetizado",
+  "prompt": "Texto completo, robusto e formatado do prompt profissional pronto para copiar, 100% em Português do Brasil",
+  "objective": "Objetivo sintetizado em Português",
   "targetIA": "${targetIA || 'Geral'}",
   "level": "${level || 'Intermediário'}",
   "desiredResult": "${desiredResult || ''}",
-  "role": "Papel e autoridade definidos para a IA",
-  "instructions": ["Passo 1", "Passo 2", "Passo 3"],
-  "constraints": ["Restrição 1", "Restrição 2"],
-  "responseFormat": "Descrição do formato exigido",
-  "qualityCriteria": "Critérios para considerar o resultado aprovado"
+  "role": "Papel e autoridade definidos para a IA em Português",
+  "instructions": ["Passo 1 em Português", "Passo 2 em Português", "Passo 3 em Português"],
+  "constraints": ["Restrição 1 em Português", "Restrição 2 em Português"],
+  "responseFormat": "Descrição do formato exigido em Português",
+  "qualityCriteria": "Critérios para considerar o resultado aprovado em Português"
 }`;
-        const userPrompt = `OBJETIVO: "${objective || ''}"\nIA DESTINO: "${targetIA || 'Geral'}"\nNÍVEL DO USUÁRIO: "${level || 'Intermediário'}"\nRESULTADO DESEJADO: "${desiredResult || 'Excelente e aplicável imediatamente'}"`;
+        const userPrompt = `OBJETIVO: "${objective || ''}"\nIA DESTINO: "${targetIA || 'Geral'}"\nNÍVEL DO USUÁRIO: "${level || 'Intermediário'}"\nRESULTADO DESEJADO: "${desiredResult || 'Excelente e aplicável imediatamente'}"\nIDIOMA OBRIGATÓRIO: ${chosenLang}`;
         const { parsed, modelUsed } = await callGroqWithFallback(systemPrompt, userPrompt, 2048);
         res.json({ success: true, ...parsed, modelUsed });
         return;
@@ -370,18 +376,21 @@ Sua missão é desenhar uma estratégia operacional sequencial (Pipeline) em 3 a
 - ETAPA 5: Revisão / Automação / Lançamento / Monitoramento
 
 REGRA DE OURO: A estratégia DEVE UTILIZAR PRIORITARIAMENTE AS IAs DO CATÁLOGO DO USUÁRIO.
+TODOS OS CAMPOS (overview, stageName, goal, whyThisIA, expectedDeliverable e ESPECIALMENTE actionPrompt) DEVEM ESTAR RIGOROSAMENTE EM PORTUGUÊS DO BRASIL.
+Nunca gere o "actionPrompt" em inglês.
+
 Para cada etapa, indique:
-- Nome da etapa
-- Objetivo da etapa
+- Nome da etapa em Português
+- Objetivo da etapa em Português
 - Qual IA do catálogo usar
-- Por que essa IA é a melhor para essa etapa
-- Entregável esperado
-- Prompt de ação para copiar e rodar naquela IA
+- Por que essa IA é a melhor para essa etapa em Português
+- Entregável esperado em Português
+- Prompt de ação em Português do Brasil para copiar e rodar naquela IA
 
 Retorne em JSON estrito:
 {
   "complexTask": "${task}",
-  "overview": "Visão geral estratégica da abordagem recomendada",
+  "overview": "Visão geral estratégica da abordagem recomendada em Português",
   "catalogCoverage": "X de Y ferramentas já disponíveis no seu catálogo",
   "steps": [
     {
@@ -389,13 +398,13 @@ Retorne em JSON estrito:
       "stageName": "Pesquisa e Planejamento",
       "goal": "Definir o escopo, público e conteúdo base",
       "recommendedIA": "Nome da IA do catálogo",
-      "whyThisIA": "Justificativa da escolha",
-      "expectedDeliverable": "Documento de arquitetura / outline detalhado",
-      "actionPrompt": "Prompt pronto para executar nessa etapa na IA indicada"
+      "whyThisIA": "Justificativa da escolha em Português",
+      "expectedDeliverable": "Documento de arquitetura / outline detalhado em Português",
+      "actionPrompt": "Prompt em Português do Brasil pronto para executar nessa etapa na IA indicada"
     }
   ]
 }`;
-        const userPrompt = `TAREFA COMPLEXA: "${task}"\n\nCATÁLOGO DO USUÁRIO DISPONÍVEL:\n${catalogSummary}`;
+        const userPrompt = `TAREFA COMPLEXA: "${task}"\n\nCATÁLOGO DO USUÁRIO DISPONÍVEL:\n${catalogSummary}\n\nIDIOMA OBRIGATÓRIO: Português do Brasil (pt-BR)`;
         const { parsed, modelUsed } = await callGroqWithFallback(systemPrompt, userPrompt, 2048);
         res.json({ success: true, ...parsed, modelUsed });
         return;

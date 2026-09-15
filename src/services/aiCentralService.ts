@@ -230,9 +230,11 @@ export async function generatePrompt(params: {
   targetIA?: string;
   level?: string;
   desiredResult?: string;
+  language?: 'pt' | 'en';
 }): Promise<PromptGenerationResult> {
   const targetIA = params.targetIA || 'Claude 3.5 Sonnet';
   const level = (params.level as any) || 'Intermediário';
+  const language = params.language || 'pt';
 
   try {
     const res = await groqClient('generate_prompt', {
@@ -240,6 +242,7 @@ export async function generatePrompt(params: {
       targetIA,
       level,
       desiredResult: params.desiredResult,
+      language,
     });
     if (res?.prompt) {
       return {

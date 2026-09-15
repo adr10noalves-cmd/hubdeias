@@ -86,6 +86,7 @@ export const CentralDeIAModal: React.FC<CentralDeIAModalProps> = ({
   const [promptObjective, setPromptObjective] = useState('');
   const [promptTargetIA, setPromptTargetIA] = useState<string>(ias[0]?.name || 'Claude 3.5 Sonnet');
   const [promptLevel, setPromptLevel] = useState<'Iniciante' | 'Intermediário' | 'Avançado'>('Intermediário');
+  const [promptLanguage, setPromptLanguage] = useState<'pt' | 'en'>('pt');
   const [promptDesiredResult, setPromptDesiredResult] = useState('');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [generatedPromptResult, setGeneratedPromptResult] = useState<PromptGenerationResult | null>(null);
@@ -227,6 +228,7 @@ export const CentralDeIAModal: React.FC<CentralDeIAModalProps> = ({
         targetIA: promptTargetIA,
         level: promptLevel,
         desiredResult: promptDesiredResult,
+        language: promptLanguage,
       });
       setGeneratedPromptResult(res);
       setEditablePromptText(res.prompt);
@@ -649,7 +651,7 @@ export const CentralDeIAModal: React.FC<CentralDeIAModalProps> = ({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
                   {/* IA DESTINO */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-300 mb-1.5">
@@ -665,6 +667,22 @@ export const CentralDeIAModal: React.FC<CentralDeIAModalProps> = ({
                           {ia.name} ({ia.category.split('/')[0].trim()})
                         </option>
                       ))}
+                    </select>
+                  </div>
+
+                  {/* IDIOMA DO PROMPT */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center justify-between">
+                      <span>IDIOMA:</span>
+                      <span className="text-[10px] text-emerald-400 font-bold">🇧🇷 Padrão</span>
+                    </label>
+                    <select
+                      value={promptLanguage}
+                      onChange={(e) => setPromptLanguage(e.target.value as any)}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white focus:border-cyan-400 outline-none font-medium"
+                    >
+                      <option value="pt">🇧🇷 Português (Brasil)</option>
+                      <option value="en">🇺🇸 Inglês (English)</option>
                     </select>
                   </div>
 
@@ -693,7 +711,7 @@ export const CentralDeIAModal: React.FC<CentralDeIAModalProps> = ({
                       type="text"
                       value={promptDesiredResult}
                       onChange={(e) => setPromptDesiredResult(e.target.value)}
-                      placeholder="Ex: Tabela comparativa, Código sem bugs..."
+                      placeholder="Ex: Tabela, Código sem bugs..."
                       className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-sm text-white focus:border-cyan-400 outline-none"
                     />
                   </div>
