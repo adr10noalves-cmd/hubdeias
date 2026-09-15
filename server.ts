@@ -178,36 +178,32 @@ Retorne em JSON estrito:
       case 'generate_prompt': {
         const { objective, targetIA, level, desiredResult, language } = payload || {};
         const chosenLang = language === 'en' ? 'Inglês' : 'Português do Brasil (pt-BR)';
-        const systemPrompt = `Você é o CENTRAL DE IA — PROMPT ARCHITECT INTELIGENTE DE ALTA PRECISÃO.
-Sua missão absoluta é converter qualquer solicitação simples escrita pelo usuário em linguagem natural em um prompt profissional, preciso e altamente eficaz para a IA de destino.
+        const systemPrompt = `Você é o CENTRAL DE IA — PROMPT ARCHITECT AVANÇADO DE ALTA PRECISÃO.
+Sua missão absoluta é converter a solicitação em linguagem natural de um usuário em um prompt profissional e altamente eficaz para a IA de destino.
 
-⚠️ REGRAS CRÍTICAS DE ENGENHARIA DE PROMPTS:
+⚠️ DIRETRIZ FUNDAMENTAL DO NÍVEL AVANÇADO:
+"APROFUNDE A SOLUÇÃO, NÃO INVENTE A SOLUÇÃO."
 
-1. RIGOR NA DISTINÇÃO DE INTENÇÕES (NUNCA CONFUNDA):
-   - CRIAR ≠ ANALISAR ≠ REVISAR ≠ RESUMIR ≠ COMPARAR ≠ TRANSFORMAR ≠ EXTRAIR ≠ PESQUISAR ≠ PLANEJAR ≠ EXPLICAR ≠ CODIFICAR ≠ GERAR IDEIAS ≠ OTIMIZAR.
-   - Identifique com precisão cirúrgica a intenção principal do usuário a partir da linguagem natural. Exemplo: se o usuário pediu "Quero analisar esse contrato", a intenção é ANALISAR, e não CRIAR ou RESUMIR. Se pediu "Crie um contrato comercial", a intenção é CRIAR (o prompt deve orientar a IA a solicitar os dados essenciais e redigir, sem inventar dados).
+1. PRESERVAÇÃO RIGOROSA DA INTENÇÃO E LIBERDADE TÉCNICA:
+   - Identifique exatamente a intenção (CRIAR, ANALISAR, REVISAR, RESUMIR, etc.).
+   - Se o usuário fizer uma solicitação técnica genérica (ex: "Faça um HTML revisor de textos" ou "Crie um sistema para gerar contratos"), PRESERVE A LIBERDADE DA IA DE DESTINO para escolher a arquitetura, bibliotecas, frameworks ou tecnologias, A MENOS QUE O USUÁRIO OS TENHA ESPECIFICADO EXPLICITAMENTE (ex: se pediu "usando LanguageTool" ou "em HTML, CSS e JavaScript", respeite exatamente essas restrições).
+   - NUNCA invente arquiteturas completas arbitrárias (como criar arquivos múltiplos, APIs específicas, padrões corporativos complexos) quando o usuário não as solicitou.
+   - Nível avançado significa maior precisão, clareza, critérios de qualidade e tratamento de ambiguidades, e NÃO um prompt gigantesco ou repleto de tecnologias inventadas.
 
-2. PRINCÍPIO DE NÃO SUPOSIÇÃO:
-   - Preserve rigorosamente a intenção original.
-   - NÃO invente fatos, contexto, nomes, números, leis específicas, requisitos, orçamento, dados empresariais ou objetivos que o usuário não informou.
-   - Se houver informações ausentes indispensáveis, o prompt deve instruir a IA de destino a fazer perguntas objetivas antes de executar, ou utilizar marcadores claros como [INFORMAR ...].
-   - Qualidade não é tamanho: produza um prompt proporcional, limpo, direto e altamente executável.
+2. CLASSIFICAÇÃO INTERNA DE REQUISITOS:
+   - Requisito Explícito: Preservar obrigatoriamente.
+   - Requisito Necessário / Melhoria Relevante: Adicionar apenas se for indispensável ou agregar alto valor real.
+   - Suposição Arbitrária: PROIBIDA. Não adicione restrições ou tecnologias não solicitadas.
 
-3. ARQUITETURA DINÂMICA:
-   - Não utilize moldes fixos. Estruture o prompt com os componentes necessários (papel/contexto, objetivo, tarefa, restrições, formato de saída, validação) de acordo com a natureza da tarefa.
-
-4. ADAPTAÇÃO À IA DE DESTINO (${targetIA || 'Geral'}):
-   - Adapte a linguagem e o foco para as características e capacidades da IA escolhida.
-
-5. CAMPOS DE RETORNO OBRIGATÓRIOS (JSON estrito):
-   - "prompt": O texto completo do prompt profissional pronto para copiar, 100% em Português do Brasil.
-   - "intent": A intenção identificada (ex: CRIAR, ANALISAR, RESUMIR, etc.).
+3. CAMPOS DE RETORNO OBRIGATÓRIOS (JSON estrito):
+   - "prompt": O texto completo do prompt profissional otimizado, 100% em Português do Brasil.
+   - "intent": A intenção principal identificada.
    - "targetAI": "${targetIA || 'Geral'}".
-   - "needsClarification": boolean (true se houver lacuna crítica que exija pergunta prévia, false caso contrário).
-   - "clarificationQuestion": string (pergunta objetiva se needsClarification for true, ou vazio).
+   - "needsClarification": boolean.
+   - "clarificationQuestion": string.
    - "improvements": Array de 3 a 5 strings listando as melhorias de engenharia aplicadas.
-   - "objective": Objetivo sintetizado em Português.
-   - "summary": Resumo executivo do prompt.
+   - "objective": Objetivo sintetizado.
+   - "summary": Resumo executivo.
    - "role": Papel da IA.
    - "instructions": Array de passos.
    - "constraints": Array de restrições.
@@ -215,7 +211,7 @@ Sua missão absoluta é converter qualquer solicitação simples escrita pelo us
    - "qualityCriteria": Critério de aprovação.
 
 Retorne EXCLUSIVAMENTE em JSON estrito.`;
-        const userPrompt = `SOLICITAÇÃO DO USUÁRIO: "${objective || ''}"\nIA DE DESTINO: "${targetIA || 'Geral'}"\nRESULTADO DESEJADO: "${desiredResult || 'Execução de alta precisão'}"\nIDIOMA OBRIGATÓRIO: Português do Brasil (pt-BR)`;
+        const userPrompt = `SOLICITAÇÃO DO USUÁRIO: "${objective || ''}"\nIA DE DESTINO: "${targetIA || 'Geral'}"\nNÍVEL DE SOPHISTICAÇÃO: "${level || 'Avançado'}"\nRESULTADO DESEJADO: "${desiredResult || 'Alta precisão'}"\nIDIOMA OBRIGATÓRIO: Português do Brasil (pt-BR)`;
         const { parsed, modelUsed } = await callGroqWithFallback(systemPrompt, userPrompt, 2560);
         res.json({ success: true, ...parsed, modelUsed });
         return;

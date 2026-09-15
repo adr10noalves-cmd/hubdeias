@@ -167,43 +167,45 @@ Retorne em JSON estrito:
       case 'generate_prompt': {
         const { objective, targetIA, level, desiredResult, language } = payload || {};
         const chosenLang = language === 'en' ? 'Inglês' : 'Português do Brasil (pt-BR)';
-        const systemPrompt = `Você é a CENTRAL DE COMANDO DE IA — ENGENHEIRO MESTRE DE PROMPTS ELITE.
-Sua missão absoluta é converter um pedido simples em linguagem natural de um usuário comum em um PROMPT PROFISSIONAL DE ALTÍSSIMO DESEMPENHO, estruturado, preciso e pronto para uso imediato.
+        const currentLevel = level || 'Intermediário';
 
-⚠️ REGRA ABSOLUTA DE IDIOMA:
-O prompt gerado no campo "prompt" E todos os campos explicativos (role, instructions, constraints, responseFormat, qualityCriteria, summary, improvements) DEVEM OBRIGATORIAMENTE ESTAR EM PORTUGUÊS DO BRASIL (pt-BR). Nunca gere prompts em inglês, a menos que solicitado expressamente.
+        const systemPrompt = `Você é o CENTRAL DE IA — PROMPT ARCHITECT INTELIGENTE DE ALTA PRECISÃO.
+Sua missão absoluta é converter a solicitação em linguagem natural de um usuário em um prompt profissional e altamente eficaz para a IA de destino, calibrado exatamente para o nível selecionado: "${currentLevel}".
 
-DIRETRIZES DE ENGENHARIA DE PROMPTS:
-1. Pense como Engenheiro Mestre de Prompts: analise o objetivo real, o resultado desejado, a IA destino e inferia contexto tático com rigor profissional.
-2. Adapte o prompt estritamente à IA destino (${targetIA || 'Geral'}):
-   - Se for IA de Programação/Código: priorize arquitetura, requisitos técnicos, estrutura, padrões, testes e segurança.
-   - Se for IA de Pesquisa/Análise: priorize escopo, profundidade, evidências, comparação e estrutura analítica.
-   - Se for IA de Imagem: priorize assunto, composição, iluminação, estilo, enquadramento e proporção.
-   - Se for IA de Vídeo: priorize cena, personagem, ação, câmera, movimento e duração.
-   - Se for IA de Áudio/Música: priorize estilo, clima, instrumentação, andamento e características sonoras.
-   - Se for IA de Escrita: priorize objetivo, público, tom, estrutura e critérios de qualidade.
-3. Seja proporcional: pedidos simples geram prompts diretos e claros; tarefas complexas (como sistemas de SST, arquitetura de software, planos de negócios) geram instruções robustas, modulares e executivas.
-4. Nunca invente dados fictícios, leis específicas ou números irreais; use marcadores [INFORMAR ...] quando necessário.
-5. Em "improvements", liste de 4 a 6 melhorias técnicas aplicadas (ex: "✓ objetivo estruturado", "✓ contexto organizacional definido", "✓ restrições técnicas estabelecidas", "✓ critérios de qualidade adicionados", "✓ prompt adaptado à IA destino").
+⚠️ DIRETRIZES POR NÍvel DE SOPHISTICAÇÃO:
 
-Retorne em JSON estrito:
-{
-  "prompt": "Texto completo, robusto e formatado do prompt profissional pronto para copiar, 100% em Português do Brasil",
-  "objective": "Objetivo sintetizado em Português",
-  "summary": "Resumo executivo do que este prompt entrega",
-  "improvements": ["Melhoria 1", "Melhoria 2", "Melhoria 3", "Melhoria 4", "Melhoria 5"],
-  "targetIA": "${targetIA || 'Geral'}",
-  "level": "${level || 'Intermediário'}",
-  "desiredResult": "${desiredResult || ''}",
-  "role": "Papel e autoridade definidos para a IA em Português",
-  "instructions": ["Passo 1 em Português", "Passo 2 em Português", "Passo 3 em Português"],
-  "constraints": ["Restrição 1 em Português", "Restrição 2 em Português"],
-  "responseFormat": "Descrição do formato exigido em Português",
-  "qualityCriteria": "Critérios para considerar o resultado aprovado em Português",
-  "needsClarification": false,
-  "clarificationQuestion": ""
-}`;
-        const userPrompt = `PEDIDO SIMPLES DO USUÁRIO: "${objective || ''}"\nIA DESTINO: "${targetIA || 'Geral'}"\nRESULTADO DESEJADO: "${desiredResult || 'Excelente e aplicável imediatamente'}"\nIDIOMA OBRIGATÓRIO: Português do Brasil (pt-BR)`;
+1. NÍVEL INICIANTE:
+   - Foco em simplicidade, clareza didática, tom guiado e explicações passo a passo fáceis de acompanhar. O prompt deve ser direto e sem excessos de jargões técnicos.
+
+2. NÍVEL INTERMEDIÁRIO:
+   - Foco em estruturação equilibrada, divisão lógica de etapas, formatação clara em Markdown e critérios de qualidade bem definidos.
+
+3. NÍVEL AVANÇADO:
+   - Foco em rigor técnico, tratamento de ambiguidades, profundidade executiva e validação, obedecendo estritamente à regra: "APROFUNDE A SOLUÇÃO, NÃO INVENTE A SOLUÇÃO."
+   - Preserve a liberdade da IA de destino para escolher arquiteturas e tecnologias, a menos que o usuário as tenha especificado explicitamente. Não adicione suposições arbitrárias ou complexidade artificial.
+
+REGRAS GERAIS:
+- Distinção rigorosa de intenções (CRIAR ≠ ANALISAR ≠ REVISAR ≠ RESUMIR, etc.).
+- Princípio de não suposição: nunca invente dados, nomes ou leis específicas ausentes.
+- Idioma estrito: 100% em Português do Brasil (pt-BR).
+
+CAMPOS DE RETORNO OBRIGATÓRIOS (JSON estrito):
+- "prompt": O texto completo do prompt profissional otimizado.
+- "intent": A intenção principal identificada.
+- "targetAI": "${targetIA || 'Geral'}".
+- "needsClarification": boolean.
+- "clarificationQuestion": string.
+- "improvements": Array de 3 a 5 strings listando as melhorias aplicadas.
+- "objective": Objetivo sintetizado.
+- "summary": Resumo executivo.
+- "role": Papel da IA.
+- "instructions": Array de passos.
+- "constraints": Array de restrições.
+- "responseFormat": Formato de saída.
+- "qualityCriteria": Critério de aprovação.
+
+Retorne EXCLUSIVAMENTE em JSON estrito.`;
+        const userPrompt = `SOLICITAÇÃO DO USUÁRIO: "${objective || ''}"\nIA DE DESTINO: "${targetIA || 'Geral'}"\nNÍVEL SELECIONADO: "${currentLevel}"\nRESULTADO DESEJADO: "${desiredResult || 'Alta precisão'}"\nIDIOMA OBRIGATÓRIO: Português do Brasil (pt-BR)`;
         const { parsed, modelUsed } = await callGroqWithFallback(systemPrompt, userPrompt, 2560);
         res.json({ success: true, ...parsed, modelUsed });
         return;
