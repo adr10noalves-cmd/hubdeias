@@ -395,4 +395,126 @@ export interface StudyItem {
   updatedAt: string;
 }
 
+// ==========================================
+// 🤖 NÚCLEO INTELIGENTE DE ORQUESTRAÇÃO DO HUB
+// ==========================================
+
+export type AssistantMode =
+  | 'CONVERSATION'
+  | 'PLANNING'
+  | 'SIMULATION'
+  | 'EVOLUTION';
+
+export type AssistantIntent =
+  | 'pergunta'
+  | 'ideia'
+  | 'projeto'
+  | 'estudo'
+  | 'tarefa'
+  | 'problema'
+  | 'decisao'
+  | 'solicitacao_analise'
+  | 'solicitacao_execucao'
+  | 'pedido_planejamento'
+  | 'pedido_simulacao'
+  | 'atualizacao_projeto';
+
+export type ExecutionValidationStatus =
+  | 'resposta_recebida'
+  | 'resposta_validada'
+  | 'erro'
+  | 'execucao_incompleta'
+  | 'resultado_pendente';
+
+export interface TaskPlanStep {
+  stepNumber: number;
+  title: string;
+  deliverable: string;
+  prompt: string;
+  toolRecommendation: string;
+  testsValidation: string;
+  status: 'Pendente' | 'Em Andamento' | 'Concluído';
+}
+
+export interface TaskPlan {
+  objective: string;
+  steps: TaskPlanStep[];
+  testingCriteria: string;
+  productionNotes: string;
+  nextEvolution: string;
+}
+
+export interface ContextualPromptData {
+  context: string;
+  objective: string;
+  problem: string;
+  environment: string;
+  constraints: string[];
+  task: string;
+  acceptanceCriteria: string[];
+  expectedResult: string;
+  fullPromptText: string;
+}
+
+export interface AIModelRecommendation {
+  modelId: string;
+  modelName: string;
+  provider: 'Groq' | 'Gemini' | 'Anthropic' | 'OpenAI' | 'Local';
+  costTier: 'FREE' | 'LOW' | 'MEDIUM' | 'HIGH';
+  specialtyMatch: string;
+  reasoning: string;
+}
+
+export interface ProjectLearningEntry {
+  id: string;
+  projectId: string;
+  learned: string;         // "O que aprendemos?"
+  workedWell: string;      // "O que funcionou?"
+  didNotWork: string;      // "O que não funcionou?"
+  neededChanges: string;   // "O que precisa ser alterado?"
+  nextStep: string;        // "Qual é o próximo passo?"
+  createdAt: string;
+}
+
+export interface OperationalExecutionRecord {
+  id: string;
+  userId?: string;
+  projectId?: string;
+  projectTitle?: string;
+  studyId?: string;
+  mode: AssistantMode;
+  isSimulation: boolean;
+  taskTitle: string;
+  intent: AssistantIntent;
+  modelUsed: string;
+  prompt: string;
+  result: string;
+  status: ExecutionValidationStatus;
+  validationNotes?: string;
+  error?: string;
+  decision?: string;
+  nextStep?: string;
+  learning?: ProjectLearningEntry;
+  durationMs: number;
+  estimatedTimeSavedMin?: number;
+  costUsd?: number;
+  createdAt: string;
+}
+
+export interface StructuredAssistantContext {
+  projectId?: string;
+  projectTitle?: string;
+  projectDescription?: string;
+  currentStage?: string;
+  currentVersion?: string;
+  objective?: string;
+  lastEvolution?: string;
+  currentProblems: string[];
+  decisions: string[];
+  nextSteps: string[];
+  relatedStudies: Array<{ id: string; theme: string; level: string; progress: number }>;
+  recentLogs: Array<{ text: string; category: string; createdAt: string }>;
+  summaryForAI: string;
+}
+
 

@@ -130,56 +130,83 @@ Retorne em formato JSON estrito:
       }
 
       case 'central_chat': {
-        const { message, history, catalog } = payload || {};
+        const { message, history, catalog, contextSummary, activeMode, intent } = payload || {};
         const userMsg = String(message || '');
         const chatHistory = Array.isArray(history) ? history : [];
         const catalogList = Array.isArray(catalog) ? catalog : [];
         
         const catalogSummary = catalogList
-          .map((item: any) => `- ${item.name} (Cat: ${item.category}, Esp: ${item.specialty}, Nível: ${item.level}, Preço: ${item.pricing}, Link: ${item.link}, Diferencial: ${item.differential})`)
+          .slice(0, 30)
+          .map((item: any) => `- ${item.name} (Cat: ${item.category}, Esp: ${item.specialty}, Nível: ${item.level}, Preço: ${item.pricing})`)
           .join('\n');
 
-        const systemPrompt = `Você é a "CENTRAL IA — ASSISTENTE INTELIGENTE DO HUB ESTRATÉGICO DE IAs".
-Sua missão é atuar como uma assistente tecnológica premium, inteligente, didática, objetiva, prestativa e profissional dentro do Hub.
+        const systemPrompt = `Você é o "NÚCLEO INTELIGENTE DE ORQUESTRAÇÃO DO HUB DE IAs".
+Sua função evoluiu de um simples chatbot para o orquestrador operacional do sistema.
 
-Você conhece profundamente o catálogo de IAs do Hub e deve usá-lo como fonte oficial.
+MODO DE OPERAÇÃO ATUAL: ${activeMode || 'CONVERSATION'}
+INTENÇÃO IDENTIFICADA: ${intent || 'pergunta'}
 
-CONHECIMENTO DO CATÁLOGO DO HUB:
+MEMÓRIA CONTEXTUAL ESTRUTURADA DO PROJETO / HUB:
+${contextSummary || 'Nenhum projeto específico ativo.'}
+
+CONHECIMENTO DO CATÁLOGO DE IAs:
 ${catalogSummary}
 
-SUAS CAPACIDADES E MODOS DE ATUAÇÃO:
-1. EXPLICAR E ENSINAR: Explicar conceitos de IA, machine learning, RAG, agentes, programação e estudos de forma progressiva (conceito -> explicação -> exemplo -> aplicação). Se o usuário pedir para aprofundar, forneça mais profundidade técnica.
-2. ENCONTRAR IA: Quando o usuário precisar de uma ferramenta para uma tarefa específica, consulte o catálogo acima e indique as melhores opções com os links exatos.
-3. CRIAR PROMPTS: Quando o usuário quiser criar prompts, oriente-o a utilizar a ferramenta de Geração de Prompts do Hub e forneça uma sugestão inicial.
-4. COMPARAR: Quando o usuário quiser comparar IAs, destaque as diferenças objetivas com base no catálogo.
-5. ESTRATÉGIA DE HUB: Oriente o usuário sobre como navegar, buscar, filtrar e cadastrar IAs no Hub.
-
-DIRETRIZES DE RESPOSTA:
-- Responda de forma natural, fluida e amigável, em Português do Brasil (pt-BR).
-- Seja objetiva por padrão, mas aprofunde quando solicitado.
-- NUNCA invente IAs que não existam no catálogo fornecido quando perguntado sobre o Hub.
-- Quando pertinente, sugira ações internas com tags de ação formatadas assim: [ACTION:OPEN_CATALOG] ou [ACTION:OPEN_PROMPT_GEN] ou [ACTION:OPEN_COMPARE] ou [ACTION:OPEN_AI:NomeDaIA].
+DIRETRIZES FUNDAMENTAIS DO NÚCLEO OPERACIONAL:
+1. MEMÓRIA & CONTEXTO: Utilize sempre a memória contextual informada acima para embasar suas respostas. Se houver um projeto ativo (como Auditor SST), mencione a última evolução, gargalos e próximos passos coerentes.
+2. OBJETIVO -> CONTEXTO -> MEMÓRIA -> PLANO -> IA -> EXECUÇÃO -> VALIDAÇÃO -> APRENDIZADO -> EVOLUÇÃO.
+3. NÃO invente dados de projetos ou capacidades fictícias de modelos.
+4. Se o usuário apresentar uma nova ideia relevante sem projeto associado, pergunte explicitamente: "Quer que eu registre essa ideia no HUB?".
+5. Sugira próximos passos acionáveis e claros.
+6. Idioma obrigatório: Português do Brasil (pt-BR).
 
 Retorne em formato JSON estrito:
 {
-  "response": "Texto principal da resposta da assistente com explicações e orientações em PT-BR",
+  "response": "Resposta executiva e didática da Central em Markdown PT-BR",
   "suggestedActions": [
     {
-      "label": "Rótulo do botão de ação",
-      "actionType": "OPEN_CATALOG" | "OPEN_PROMPT_GEN" | "OPEN_COMPARE" | "OPEN_AI",
-      "target": "Nome da IA ou parâmetro opcional"
+      "label": "Rótulo do botão",
+      "actionType": "OPEN_PROJECT_DETAIL" | "SWITCH_TO_SIMULATION" | "SWITCH_TO_PLANNING" | "OPEN_CATALOG" | "OPEN_PROMPT_GEN" | "OPEN_COMPARE",
+      "target": "id ou parâmetro opcional"
     }
   ],
-  "intentDetected": "explain" | "teach" | "find_ai" | "prompt" | "compare" | "study" | "strategy"
+  "intentDetected": "${intent || 'pergunta'}"
 }`;
 
         const formattedHistory = chatHistory
-          .slice(-6) // últimas 6 mensagens para manter contexto
+          .slice(-6)
           .map((h: any) => `${h.role === 'user' ? 'Usuário' : 'Central IA'}: ${h.content}`)
           .join('\n');
 
-        const userPrompt = `HISTÓRICO RECENTE DA CONVERSA:\n${formattedHistory}\n\nNOVA MENSAGEM DO USUÁRIRO: "${userMsg}"`;
+        const userPrompt = `HISTÓRICO RECENTE DA CONVERSA:\n${formattedHistory}\n\nNOVA MENSAGEM DO USUÁRIO: "${userMsg}"`;
 
+        const { parsed, modelUsed } = await callGroqWithFallback(systemPrompt, userPrompt, 2048);
+        res.json({ success: true, ...parsed, modelUsed });
+        return;
+      }
+
+      case 'simulate_scenario': {
+        const { objective, contextSummary, projectName } = payload || {};
+        const systemPrompt = `Você é o SIMULATION ENGINE do HUB ESTRATÉGICO DE IAs, operando em sandbox experimental Groq.
+Sua missão é SIMULAR um cenário operacional de comportamento do sistema ou projeto.
+
+⚠️ REGRA INVIOLÁVEL: Diferencie expressamente que este é um resultado de SIMULAÇÃO VIRTUAL e NÃO execução em produção.
+
+CONTEXTO DO PROJETO:
+${contextSummary || 'Ambiente geral do Hub'}
+
+OBJETIVO DO CENÁRIO A SIMULAR:
+"${objective || 'Simulação de comportamento'}"
+
+Retorne em formato JSON estrito:
+{
+  "simulatedOutput": "Detalhamento analítico da simulação do cenário com fluxo de dados, comportamento dos módulos e resultado projetado em Markdown",
+  "strengths": ["Ponto forte 1 observado na simulação", "Ponto forte 2"],
+  "risks": ["Risco ou gargalo 1 identificado na simulação", "Risco 2"],
+  "nextSteps": ["Próximo passo real recomendado 1", "Próximo passo 2"]
+}`;
+
+        const userPrompt = `Executar simulação para o objetivo: "${objective}"\nProjeto: "${projectName || 'Geral'}"`;
         const { parsed, modelUsed } = await callGroqWithFallback(systemPrompt, userPrompt, 2048);
         res.json({ success: true, ...parsed, modelUsed });
         return;

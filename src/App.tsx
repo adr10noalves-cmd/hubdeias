@@ -820,9 +820,12 @@ export default function App() {
         onClearCompare={handleClearCompare}
       />
 
-      {/* 🤖 CENTRAL IA — ASSISTENTE INTELIGENTE DO HUB (V2.7) */}
+      {/* 🤖 CENTRAL IA — NÚCLEO INTELIGENTE DE ORQUESTRAÇÃO DO HUB */}
       <CentralAICoordinator
         catalog={ias}
+        ideas={ideas}
+        studies={studies}
+        evolutionLogs={evolutionLogs}
         onOpenCatalogWithFilter={(cat) => {
           setSelectedCategory(cat);
           window.scrollTo({ top: 580, behavior: 'smooth' });
@@ -830,6 +833,21 @@ export default function App() {
         onOpenPromptGen={() => setIsCentralIAOpen(true)}
         onOpenCompare={() => setIsCompareOpen(true)}
         onOpenAIDetail={(ai) => handleOpenDetail(ai)}
+        onOpenIdeaDetail={(idea) => {
+          setSelectedIdeaDetail(idea);
+          setIsIdeaDetailOpen(true);
+        }}
+        onCreateIdea={async (newIdea) => {
+          await saveIdeaToFirestore(newIdea);
+          setIdeas((prev) => [newIdea, ...prev.filter((i) => i.id !== newIdea.id)]);
+        }}
+        onUpdateIdea={async (updated) => {
+          await saveIdeaToFirestore(updated);
+          setIdeas((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+        }}
+        onSelectStudy={(study) => {
+          setCurrentHubView('studies');
+        }}
       />
 
       {/* 🔍 BUSCA INTELIGENTE CRUZADA GLOBAL (Ctrl + K) */}

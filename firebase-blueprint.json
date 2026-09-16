@@ -141,6 +141,28 @@
         "createdAt": { "type": "string" }
       },
       "required": ["id", "ideaId", "revisionNumber", "userRequest", "improvementSummary"]
+    },
+    "operational_executions": {
+      "title": "Registro de Execuções e Simulações Operacionais",
+      "description": "Histórico de tarefas, simulações em ambiente Groq e validações do assistente",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "projectTitle": { "type": "string" },
+        "mode": { "type": "string" },
+        "isSimulation": { "type": "boolean" },
+        "taskTitle": { "type": "string" },
+        "intent": { "type": "string" },
+        "modelUsed": { "type": "string" },
+        "prompt": { "type": "string" },
+        "result": { "type": "string" },
+        "status": { "type": "string" },
+        "durationMs": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "mode", "isSimulation", "taskTitle", "result", "status"]
     }
   },
   "firestore": {
@@ -167,6 +189,10 @@
     "/project_revisions/{revisionId}": {
       "schema": "project_revisions",
       "description": "Histórico de revisões contínuas e infinitas com a IA"
+    },
+    "/operational_executions/{executionId}": {
+      "schema": "operational_executions",
+      "description": "Histórico persistente de execuções operacionais e simulações do assistente"
     }
   }
 }

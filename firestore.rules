@@ -36,6 +36,12 @@ service cloud.firestore {
       allow read: if true;
       allow write: if true;
     }
+
+    // Histórico de execuções operacionais e simulações do Assistente
+    match /operational_executions/{executionId} {
+      allow read: if true;
+      allow write: if true;
+    }
   }
 }
 
