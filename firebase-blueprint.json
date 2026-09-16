@@ -122,6 +122,25 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "theme", "level", "progress"]
+    },
+    "project_revisions": {
+      "title": "Histórico de Revisões e Melhorias Infinitas",
+      "description": "Revisões consecutivas aplicadas pela IA ao projeto (conceito, aplicação e etapas)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ideaId": { "type": "string" },
+        "userId": { "type": "string" },
+        "revisionNumber": { "type": "number" },
+        "userRequest": { "type": "string" },
+        "improvementSummary": { "type": "string" },
+        "conceptChanges": { "type": "string" },
+        "applicationChanges": { "type": "string" },
+        "stagesChangedCount": { "type": "number" },
+        "modelUsed": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "ideaId", "revisionNumber", "userRequest", "improvementSummary"]
     }
   },
   "firestore": {
@@ -144,6 +163,10 @@
     "/studies/{studyId}": {
       "schema": "studies",
       "description": "Banco de estudos e aprendizados do usuário"
+    },
+    "/project_revisions/{revisionId}": {
+      "schema": "project_revisions",
+      "description": "Histórico de revisões contínuas e infinitas com a IA"
     }
   }
 }

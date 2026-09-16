@@ -30,6 +30,12 @@ service cloud.firestore {
       allow read: if true;
       allow write: if true;
     }
+
+    // Histórico de revisões e melhorias infinitas com IA
+    match /project_revisions/{revisionId} {
+      allow read: if true;
+      allow write: if true;
+    }
   }
 }
 

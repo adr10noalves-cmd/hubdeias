@@ -29,6 +29,10 @@ import {
   Edit3,
   Check,
   Zap,
+  Workflow,
+  ShieldCheck,
+  FileCode2,
+  Copy,
 } from 'lucide-react';
 
 interface AICoCreateProjectModalProps {
@@ -67,6 +71,8 @@ export const AICoCreateProjectModal: React.FC<AICoCreateProjectModalProps> = ({
   // Proposta gerada pela IA
   const [proposal, setProposal] = useState<StructuredProjectProposal | null>(null);
   const [autoCreateStudies, setAutoCreateStudies] = useState(true);
+  const [expandedStageIndex, setExpandedStageIndex] = useState<number | null>(0);
+  const [copiedPromptIndex, setCopiedPromptIndex] = useState<number | null>(null);
 
   if (!isOpen) return null;
 
@@ -319,6 +325,104 @@ export const AICoCreateProjectModal: React.FC<AICoCreateProjectModalProps> = ({
                   {proposal.targetAudience}
                 </p>
               </div>
+
+              {/* Conceito & Aplicação Prática Gerados pela IA */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl bg-slate-900/80 border border-cyan-500/30 space-y-2">
+                  <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Target className="w-4 h-4" /> Conceito & Mecânica Central
+                  </span>
+                  <div className="space-y-1.5 text-xs">
+                    <p className="text-slate-200 font-medium bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                      {proposal.concept?.summary || proposal.description}
+                    </p>
+                    <div className="text-[11px] text-slate-400 space-y-1">
+                      <div><strong className="text-cyan-300">Valor Central:</strong> {proposal.concept?.coreValue}</div>
+                      <div><strong className="text-indigo-300">Mecânica:</strong> {proposal.concept?.mechanics}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-900/80 border border-indigo-500/30 space-y-2">
+                  <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <Workflow className="w-4 h-4" /> Aplicação Prática no Mundo Real
+                  </span>
+                  <div className="space-y-1.5 text-xs">
+                    <ul className="space-y-1 text-[11px] text-slate-300 bg-slate-950 p-2.5 rounded-xl border border-slate-800">
+                      {(proposal.application?.realWorldUseCases || []).slice(0, 3).map((uc, i) => (
+                        <li key={i} className="flex items-start gap-1.5">
+                          <span className="text-indigo-400">•</span>
+                          <span>{uc}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="text-[11px] text-slate-400 truncate">
+                      <strong className="text-amber-300">Arquitetura:</strong> {proposal.application?.architecture}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Etapas do Projeto & Prompts de Execução */}
+              {proposal.stages && proposal.stages.length > 0 && (
+                <div className="p-4 rounded-2xl bg-slate-900/80 border border-cyan-500/30 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <FileCode2 className="w-4 h-4" /> Etapas do Projeto & Prompts de IA ({proposal.stages.length} Etapas)
+                    </span>
+                    <span className="text-[11px] text-slate-400">Clique para ver o prompt de cada etapa</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    {proposal.stages.map((stg, idx) => {
+                      const isExp = expandedStageIndex === idx;
+                      const isCopied = copiedPromptIndex === idx;
+
+                      return (
+                        <div key={stg.id || idx} className="rounded-xl border border-slate-800 bg-slate-950 overflow-hidden">
+                          <div
+                            onClick={() => setExpandedStageIndex(isExp ? null : idx)}
+                            className="p-3 flex items-center justify-between gap-2 cursor-pointer hover:bg-slate-900/60"
+                          >
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className="w-5 h-5 rounded bg-cyan-500/20 text-cyan-300 font-bold text-[11px] flex items-center justify-center flex-shrink-0">
+                                {stg.order || idx + 1}
+                              </span>
+                              <span className="text-xs font-bold text-white truncate">{stg.title}</span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">{stg.phase}</span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(stg.prompt);
+                                setCopiedPromptIndex(idx);
+                                setTimeout(() => setCopiedPromptIndex(null), 2000);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 flex items-center gap-1"
+                            >
+                              {isCopied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                              <span>{isCopied ? 'Copiado' : 'Copiar Prompt'}</span>
+                            </button>
+                          </div>
+
+                          {isExp && (
+                            <div className="px-3 pb-3 pt-1 border-t border-slate-800/80 text-xs space-y-2">
+                              <div className="text-[11px] text-slate-400">
+                                <strong>Entregável:</strong> {stg.deliverable}
+                              </div>
+                              <div className="p-2.5 rounded-lg bg-black/60 border border-slate-800 font-mono text-[11px] text-cyan-200 whitespace-pre-wrap">
+                                {stg.prompt}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Tecnologias & IAs do Catálogo Recomendadas */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

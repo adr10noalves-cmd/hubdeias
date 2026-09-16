@@ -31,6 +31,7 @@ import { RoadmapEditor } from './RoadmapEditor';
 import { IdeaEvolutionHistory } from './IdeaEvolutionHistory';
 import { IdeaDiaryTab } from './IdeaDiaryTab';
 import { AIEvolutionAssistantTab } from './AIEvolutionAssistantTab';
+import { ProjectConceptAndStagesTab } from './ProjectConceptAndStagesTab';
 import {
   X,
   Sparkles,
@@ -46,6 +47,7 @@ import {
   Clock,
   Tag,
   Plus,
+  FileCode2,
 } from 'lucide-react';
 
 interface IdeaDetailModalProps {
@@ -59,7 +61,7 @@ interface IdeaDetailModalProps {
   onSelectInCatalog?: (toolName: string) => void;
 }
 
-type TabType = 'overview' | 'evolution' | 'diary' | 'roadmap' | 'studies' | 'ai_assistant';
+type TabType = 'overview' | 'concept_stages' | 'evolution' | 'diary' | 'roadmap' | 'studies' | 'ai_assistant';
 
 export const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
   idea,
@@ -283,6 +285,19 @@ export const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
           >
             <LayoutList className="w-4 h-4" />
             <span>Memória & Escopo</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('concept_stages')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-t-xl text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+              activeTab === 'concept_stages'
+                ? 'border-indigo-400 text-indigo-300 bg-indigo-500/10'
+                : 'border-transparent text-slate-400 hover:text-indigo-300'
+            }`}
+          >
+            <FileCode2 className="w-4 h-4 text-indigo-400" />
+            <span>Conceito, Aplicação & Prompts ({formData.stages?.length || 6})</span>
           </button>
 
           <button
@@ -590,6 +605,19 @@ export const IdeaDetailModal: React.FC<IdeaDetailModalProps> = ({
                 </div>
               )}
             </div>
+          )}
+
+          {/* TAB: CONCEITO, APLICAÇÃO PRÁTICA & PROMPTS DAS ETAPAS COM REVISÕES INFINITAS */}
+          {activeTab === 'concept_stages' && (
+            <ProjectConceptAndStagesTab
+              idea={formData}
+              catalog={catalog}
+              onUpdateIdea={(updated) => {
+                setFormData(updated);
+                onUpdateIdea(updated);
+              }}
+              onSelectInCatalog={onSelectInCatalog}
+            />
           )}
 
           {/* TAB 2: HISTÓRICO DE EVOLUÇÃO (V1, V2, V3...) */}

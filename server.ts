@@ -571,42 +571,138 @@ PERGUNTA ESPECÍFICA DO USUÁRIO: "${q}"`;
           : 'Nenhum projeto cadastrado anteriormente.';
 
         const systemPrompt = `Você é o ARQUITETO ESTRATÉGICO DE PROJETOS, SISTEMAS E IA do Hub drico IAS.
-Sua missão é pegar uma solicitação em linguagem natural de um usuário e transformá-la em uma ESTRUTURA COMPLETA, PROFISSIONAL E EXECUTÁVEL DE PROJETO / IDEIA que será atrelada diretamente ao banco de dados Firestore.
+Sua missão é pegar uma ideia ou necessidade bruta do usuário e transformá-la em uma ESTRUTURA PROFISSIONAL, EXECUTÁVEL E COMPLETA, dividida em:
+1. CONCEITO TEÓRICO & ARQUITETURA DE VALOR (A tese, o porquê e os princípios conceituais da solução).
+2. APLICAÇÃO PRÁTICA NO MUNDO REAL (Fluxo do usuário, casos de uso reais, regras de negócio e arquitetura prática).
+3. ETAPAS SEQUENCIAIS COM PROMPT COMPLETO DE CADA UMA (Da concepção inicial até a etapa final de produção/deploy). Cada etapa DEVE ter um PROMPT COMPLETO, rico e pronto para o usuário copiar ou rodar na IA para executar aquela fase específica do desenvolvimento!
+4. ROADMAP, DIÁRIO DE BORDO E ESTUDOS CONECTADOS.
 
 DIRETRIZES FUNDAMENTAIS:
-1. NÃO SEJA GENÉRICO: Se o usuário falou sobre SST, laudos, automação, SaaS ou WhatsApp, seja extremamente específico, cite termos reais da área e dores autênticas.
-2. CATEGORIAS VÁLIDAS: "Projeto" | "Estudo" | "IA" | "SST" | "Automação" | "Negócios" | "Software" | "Pesquisa" | "Produto" | "Outros". Escolha a mais precisa. Se o usuário forneceu a dica "${categoryHint || ''}", leve em conta.
-3. ESTÁGIOS VÁLIDOS (Maturidade 1 a 9): "1. Ideia" | "2. Exploração" | "3. Planejamento" | "4. Protótipo" | "5. MVP" | "6. Validação" | "7. Implementação" | "8. Otimização" | "9. Evolução". Comece geralmente em "1. Ideia", "2. Exploração" ou "3. Planejamento", a menos que o usuário já tenha algo pronto.
-4. PRIORIDADE: "Baixa" | "Média" | "Alta" | "Crítica".
-5. ROADMAP EM 4 HORIZONTES:
-   - "Atual": Ações imediatas para colocar o projeto de pé ou validar o escopo inicial (status: "Em Andamento").
-   - "Próxima Evolução": Funcionalidade chave subsequente (status: "Pendente").
-   - "Depois": Integração avançada ou expansão (status: "Pendente").
-   - "Futuro": Visão de longo prazo ou escala automatizada (status: "Pendente").
-6. SELEÇÃO DE IAs DO CATÁLOGO: Escolha entre as IAs do catálogo fornecido aquelas que realmente agregam valor ao projeto.
-7. ESTUDOS COMPLEMENTARES SUGERIDOS: Sugira de 1 a 2 temas práticos para o Banco de Estudos que ajudarão o usuário a dominar o conhecimento necessário para construir esse projeto.
-8. DIÁRIO DE BORDO INICIAL: Crie uma anotação reflexiva da fundação do projeto registrando as hipóteses e decisões iniciais.
+1. CATEGORIAS: "Projeto" | "Estudo" | "IA" | "SST" | "Automação" | "Negócios" | "Software" | "Pesquisa" | "Produto" | "Outros".
+2. ESTÁGIOS (1 a 9): "1. Ideia" | "2. Exploração" | "3. Planejamento" | "4. Protótipo" | "5. MVP" | "6. Validação" | "7. Implementação" | "8. Otimização" | "9. Evolução".
+3. PRIORIDADE: "Baixa" | "Média" | "Alta" | "Crítica".
+4. ETAPAS E PROMPTS (Crie exatamente entre 5 e 6 etapas sequenciais até a entrega final):
+   - Etapa 1: Concepção & Modelagem de Requisitos
+   - Etapa 2: Arquitetura de Dados, Schemas & Modelos
+   - Etapa 3: Desenvolvimento Backend / Lógica de Negócio
+   - Etapa 4: Interface de Usuário (UI/UX) & Experiência
+   - Etapa 5: Integrações, Automações & APIs
+   - Etapa 6 (Etapa Final): Testes, Deploy, Monitoramento & Lançamento
+   CADA ETAPA DEVE CONTER O SEU "prompt" COMPLETO E DETALHADO, pronto para o desenvolvedor ou a IA codificar ou projetar exatamente aquela parte!
 
-CATÁLOGO DE IAs DISPONÍVEL NO HUB:
+CATÁLOGO DE IAs DO HUB:
 ${catalogSummary}
 
-PROJETOS JÁ EXISTENTES NO HUB DO USUÁRIO:
+PROJETOS EXISTENTES:
 ${existingSummary}
 
 Retorne EXCLUSIVAMENTE em formato JSON estrito:
 {
   "title": "Nome marcante e profissional do projeto",
   "description": "Resumo executivo de 2 a 3 frases explicando o que é e como funciona",
-  "category": "Categoria selecionada dentre as válidas",
+  "category": "Categoria selecionada",
   "stage": "Estágio de maturidade inicial",
   "priority": "Média" | "Alta" | "Crítica" | "Baixa",
-  "objective": "Objetivo central claro, mensurável e com foco em resultado",
-  "problemSolved": "Problemas concretos, dores do mercado ou processos manuais que ele elimina",
-  "targetAudience": "Público-alvo, clientes potenciais ou personas beneficiadas",
+  "objective": "Objetivo central claro e mensurável",
+  "problemSolved": "Problemas concretos e dores do mercado que ele elimina",
+  "targetAudience": "Público-alvo, personas ou beneficiários",
   "relatedTechnologies": ["Stack 1", "Stack 2", "Stack 3", "Stack 4"],
-  "relatedIANames": ["Nome da IA existente no catálogo 1", "Nome da IA 2"],
-  "observations": "Observações arquiteturais estratégicas e diferenciais competitivos",
-  "nextSteps": "Primeira tarefa prática e acionável para o usuário começar imediatamente hoje",
+  "relatedIANames": ["Nome de IA do catálogo 1", "Nome de IA 2"],
+  "observations": "Observações arquiteturais estratégicas e diferenciais",
+  "nextSteps": "Primeira tarefa prática e acionável para hoje",
+  "concept": {
+    "summary": "Explicação aprofundada do conceito e tese do projeto",
+    "coreValue": "Proposta de valor única e impacto gerado",
+    "mechanics": "Mecânica e princípios conceituais de funcionamento",
+    "marketFit": "Diferencial de mercado e posicionamento competitivo"
+  },
+  "application": {
+    "realWorldUseCases": [
+      "Caso de uso real 1 no dia a dia",
+      "Caso de uso real 2 no dia a dia",
+      "Caso de uso real 3 no dia a dia"
+    ],
+    "userFlow": [
+      "Passo 1 do fluxo do usuário",
+      "Passo 2 do fluxo do usuário",
+      "Passo 3 do fluxo do usuário",
+      "Passo 4 do fluxo do usuário"
+    ],
+    "businessRules": [
+      "Regra de negócio fundamental 1",
+      "Regra de negócio fundamental 2",
+      "Regra de negócio fundamental 3"
+    ],
+    "architecture": "Descrição da arquitetura prática de funcionamento e fluxo de dados"
+  },
+  "stages": [
+    {
+      "id": "stg-1",
+      "order": 1,
+      "title": "Etapa 1: Concepção & Modelagem de Requisitos",
+      "phase": "Concepção",
+      "objective": "Objetivo detalhado da etapa",
+      "deliverable": "Entregável tangível desta etapa",
+      "prompt": "Você é um Engenheiro de Software Sênior. Sua tarefa é criar a especificação completa de requisitos funcionais e não-funcionais para o projeto [Nome]...",
+      "recommendedTools": ["Claude 3.5 Sonnet", "ChatGPT", "Notion"],
+      "status": "Em Andamento"
+    },
+    {
+      "id": "stg-2",
+      "order": 2,
+      "title": "Etapa 2: Arquitetura de Dados & Modelagem",
+      "phase": "Arquitetura",
+      "objective": "Modelar o banco de dados e diagramas relacionais",
+      "deliverable": "Schemas SQL / NoSQL e diagramas de entidade-relacionamento",
+      "prompt": "Atue como Arquiteto de Dados. Modele as tabelas e schemas necessários para...",
+      "recommendedTools": ["Supabase", "Prisma", "DrawDB"],
+      "status": "Pendente"
+    },
+    {
+      "id": "stg-3",
+      "order": 3,
+      "title": "Etapa 3: Desenvolvimento do Core / Backend",
+      "phase": "Backend",
+      "objective": "Construir os endpoints e regras de negócio",
+      "deliverable": "APIs RESTful e funções de serviço",
+      "prompt": "Você é um Desenvolvedor Backend Especialista. Escreva a implementação dos serviços...",
+      "recommendedTools": ["Node.js", "Express", "Cursor"],
+      "status": "Pendente"
+    },
+    {
+      "id": "stg-4",
+      "order": 4,
+      "title": "Etapa 4: Interface do Usuário (UI/UX) & Front-end",
+      "phase": "Frontend",
+      "objective": "Criar a interface intuitiva e responsiva",
+      "deliverable": "Componentes visuais e integração de estado",
+      "prompt": "Atue como Designer e Desenvolvedor Front-end. Crie a interface completa em React e Tailwind...",
+      "recommendedTools": ["v0.dev", "Bolt.new", "Tailwind CSS"],
+      "status": "Pendente"
+    },
+    {
+      "id": "stg-5",
+      "order": 5,
+      "title": "Etapa 5: Integrações, Automações & APIs Externas",
+      "phase": "Integrações",
+      "objective": "Conectar APIs e fluxos de automação",
+      "deliverable": "Webhooks e conectores funcionais",
+      "prompt": "Atue como Engenheiro de Integração. Desenvolva as integrações de API...",
+      "recommendedTools": ["n8n", "Postman", "Zapier"],
+      "status": "Pendente"
+    },
+    {
+      "id": "stg-6",
+      "order": 6,
+      "title": "Etapa Final: Testes, Deploy, Monitoramento & Lançamento",
+      "phase": "Deploy Final",
+      "objective": "Garantir segurança, realizar testes e deploy em produção",
+      "deliverable": "Aplicação rodando em produção com logs e testes automatizados",
+      "prompt": "Atue como Engenheiro DevOps e QA. Escreva os testes e configure o pipeline de CI/CD para deploy...",
+      "recommendedTools": ["Docker", "Vercel / Cloud Run", "GitHub Actions"],
+      "status": "Pendente"
+    }
+  ],
   "roadmap": [
     { "stageTitle": "Atual", "goal": "Meta imediata para o momento atual", "status": "Em Andamento" },
     { "stageTitle": "Próxima Evolução", "goal": "Próxima meta estruturante", "status": "Pendente" },
@@ -614,23 +710,153 @@ Retorne EXCLUSIVAMENTE em formato JSON estrito:
     { "stageTitle": "Futuro", "goal": "Meta de longo prazo, automação avançada ou escala", "status": "Pendente" }
   ],
   "initialDiaryLog": {
-    "text": "Texto do registro de abertura no Diário de Bordo descrevendo o ponto de partida, a hipótese validada e o direcionamento inicial do projeto.",
+    "text": "Texto do registro de abertura no Diário de Bordo descrevendo o ponto de partida e premissas fundamentais da V1.",
     "category": "Decisão",
-    "impact": "Definição do escopo inicial, direcionamento tecnológico e premissas fundamentais da V1."
+    "impact": "Definição do escopo, arquitetura conceitual e etapas de execução."
   },
   "suggestedStudies": [
     {
       "theme": "Nome do tema de estudo recomendado",
-      "objective": "O que o usuário deve aprender para viabilizar e acelerar esse projeto",
+      "objective": "O que o usuário deve aprender para acelerar esse projeto",
       "level": "Iniciante" | "Intermediário" | "Avançado",
-      "toolsUsed": ["Nome de ferramenta ou biblioteca recomendada"]
+      "toolsUsed": ["Ferramenta ou biblioteca recomendada"]
     }
   ],
-  "versionNote": "Estrutura V1 concebida em co-criação com o Arquiteto de IA do Hub"
+  "versionNote": "Conceito, Aplicação Prática e Etapas com Prompts concebidos com IA"
 }`;
 
         const userPrompt = `SOLICITAÇÃO DO USUÁRIO PARA CO-CRIAR PROJETO:\n"${requestText}"`;
-        const { parsed, modelUsed } = await callGroqWithFallback(systemPrompt, userPrompt, 2500);
+        const { parsed, modelUsed } = await callGroqWithFallback(systemPrompt, userPrompt, 3500);
+        res.json({ success: true, ...parsed, modelUsed });
+        return;
+      }
+
+      case 'infinite_revision_with_ai': {
+        const { idea, userRequest, currentRevisionNumber, catalog } = payload || {};
+        const requestText = String(userRequest || '').trim();
+
+        if (!idea || !idea.id) {
+          res.status(400).json({ error: 'idea é obrigatório para revisão.' });
+          return;
+        }
+
+        if (!requestText) {
+          res.status(400).json({ error: 'userRequest de melhoria é obrigatório.' });
+          return;
+        }
+
+        const nextRevNumber = (Number(currentRevisionNumber) || (idea.revisionsCount || 0)) + 1;
+
+        const systemPrompt = `Você é o ARQUITETO DE MELHORIAS E REVISÕES INFINITAS DE PROJETOS E IAs do Hub drico IAS.
+O usuário está solicitando uma NOVA REVISÃO (Melhoria Contínua) para o projeto "${idea.title}".
+O sistema permite infinitas melhorias e revisões consecutivas conforme o projeto amadurece.
+
+SUA MISSÃO NESTA REVISÃO #${nextRevNumber}:
+1. Analisar as solicitações de melhoria do usuário com profundidade.
+2. Refinar o CONCEITO e a APLICAÇÃO PRÁTICA do projeto incorporando os novos requisitos.
+3. Atualizar, enriquecer ou adicionar as ETAPAS e gerar os PROMPTS REVISADOS de cada etapa até a etapa final.
+4. Elaborar um resumo analítico das melhorias implementadas nesta revisão.
+5. Indicar novas tecnologias e ferramentas se aplicável.
+
+Retorne EXCLUSIVAMENTE em formato JSON estrito:
+{
+  "revisionNumber": ${nextRevNumber},
+  "improvementSummary": "Resumo detalhado das melhorias e refatorações realizadas nesta revisão",
+  "conceptChanges": "O que mudou na tese conceitual ou no valor do projeto",
+  "applicationChanges": "O que mudou na aplicação prática, regras ou fluxos",
+  "updatedTitle": "${idea.title}",
+  "updatedDescription": "Descrição executiva atualizada do projeto",
+  "updatedPriority": "${idea.priority || 'Alta'}",
+  "updatedConcept": {
+    "summary": "Resumo atualizado do conceito",
+    "coreValue": "Proposta de valor atualizada",
+    "mechanics": "Princípios de funcionamento refinados",
+    "marketFit": "Diferencial competitivo aprimorado"
+  },
+  "updatedApplication": {
+    "realWorldUseCases": [
+      "Caso de uso real atualizado 1",
+      "Caso de uso real atualizado 2",
+      "Caso de uso real atualizado 3"
+    ],
+    "userFlow": [
+      "Passo 1 do fluxo revisado",
+      "Passo 2 do fluxo revisado",
+      "Passo 3 do fluxo revisado",
+      "Passo 4 do fluxo revisado"
+    ],
+    "businessRules": [
+      "Regra de negócio revisada 1",
+      "Regra de negócio revisada 2",
+      "Regra de negócio revisada 3"
+    ],
+    "architecture": "Arquitetura técnica aprimorada"
+  },
+  "updatedStages": [
+    {
+      "id": "stg-rev-1",
+      "order": 1,
+      "title": "Título da Etapa 1 Revisada",
+      "phase": "Concepção",
+      "objective": "Objetivo refinado",
+      "deliverable": "Entregável da etapa",
+      "prompt": "Prompt revisado e pronto para IA...",
+      "recommendedTools": ["Ferramenta 1", "Ferramenta 2"],
+      "status": "Em Andamento"
+    }
+  ],
+  "addedTechnologies": ["Tecnologia nova se houver"],
+  "diaryEntry": {
+    "text": "Registro de reflexão sobre a Revisão #${nextRevNumber} no Diário de Bordo...",
+    "category": "Decisão",
+    "impact": "Impacto estratégico das melhorias implementadas."
+  }
+}`;
+
+        const userPrompt = `PROJETO ATUAL:
+Título: ${idea.title}
+Descrição: ${idea.description}
+Objetivo: ${idea.objective}
+Problema: ${idea.problemSolved}
+Tecnologias: ${(idea.relatedTechnologies || []).join(', ')}
+Conceito Atual: ${JSON.stringify(idea.concept || {})}
+Aplicação Atual: ${JSON.stringify(idea.application || {})}
+Quantidade de Etapas Atuais: ${(idea.stages || []).length}
+
+SOLICITAÇÃO DE MELHORIA / REVISÃO DO USUÁRIO:
+"${requestText}"`;
+
+        const { parsed, modelUsed } = await callGroqWithFallback(systemPrompt, userPrompt, 3500);
+        res.json({ success: true, ...parsed, modelUsed });
+        return;
+      }
+
+      case 'execute_stage_prompt_with_ai': {
+        const { projectTitle, stageTitle, prompt, executionContext } = payload || {};
+        const stagePromptText = String(prompt || '').trim();
+
+        if (!stagePromptText) {
+          res.status(400).json({ error: 'Prompt da etapa é obrigatório para execução.' });
+          return;
+        }
+
+        const systemPrompt = `Você é um ENGENHEIRO DE SOFTWARE E ARQUITETO DE SISTEMAS EXECUTOR do Hub drico IAS.
+Sua missão é EXECUTAR o prompt da etapa "${stageTitle || 'Etapa do Projeto'}" para o projeto "${projectTitle || 'Projeto'}".
+Gere uma entrega completa, prática, profissional e utilizável (ex: código-fonte limpo, arquitetura detalhada, diagramas textuais, schemas, regras de negócio ou especificação técnica conforme o prompt solicitar).
+Seja detalhista, preciso e focado na execução com excelência técnica.
+
+Retorne em formato JSON estrito:
+{
+  "stageTitle": "${stageTitle || 'Etapa'}",
+  "outputType": "code" | "specification" | "architecture" | "documentation",
+  "resultContent": "Texto completo com a entrega da etapa (código, modelo, especificações, markdown estruturado)",
+  "executionSummary": "Resumo em 2 frases do que foi gerado para esta etapa",
+  "nextSuggestedAction": "Próxima ação recomendada para colocar esta entrega em prática"
+}`;
+
+        const userPrompt = `CONTEXTO DO PROJETO: ${projectTitle}\nETAPA: ${stageTitle}\nCONTEXTO ADICIONAL: ${executionContext || 'Nenhum'}\n\nPROMPT DA ETAPA A EXECUTAR:\n"${stagePromptText}"`;
+
+        const { parsed, modelUsed } = await callGroqWithFallback(systemPrompt, userPrompt, 3000);
         res.json({ success: true, ...parsed, modelUsed });
         return;
       }

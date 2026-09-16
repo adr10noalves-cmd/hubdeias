@@ -16,12 +16,14 @@ import {
   EvolutionLog,
   StudyItem,
   RoadmapItem,
+  ProjectRevision,
 } from '../types';
 
 const IDEAS_COLLECTION = 'ideas';
 const VERSIONS_COLLECTION = 'idea_versions';
 const LOGS_COLLECTION = 'evolution_logs';
 const STUDIES_COLLECTION = 'studies';
+const REVISIONS_COLLECTION = 'project_revisions';
 
 const LOCAL_STORAGE_PREFIX = 'hub_strategic_memory_';
 
@@ -219,6 +221,71 @@ export function subscribeToIdeaVersions(
     },
     (error) => {
       console.warn('[Firestore subscribeToIdeaVersions Error]:', error);
+      if (onError) onError(error);
+    }
+  );
+}
+
+// ==========================================
+// 🔄 REVISÕES INFINITAS COM IA
+// ==========================================
+
+export async function getProjectRevisionsFromFirestore(ideaId: string): Promise<ProjectRevision[]> {
+  try {
+    const colRef = collection(db, REVISIONS_COLLECTION);
+    const q = query(colRef, where('ideaId', '==', ideaId));
+    const snap = await getDocs(q);
+    const items: ProjectRevision[] = [];
+    snap.forEach((docSnap) => {
+      items.push({
+        ...docSnap.data(),
+        id: docSnap.id,
+      } as ProjectRevision);
+    });
+    items.sort((a, b) => (b.revisionNumber || 0) - (a.revisionNumber || 0));
+    return items;
+  } catch (err) {
+    console.warn(`[Firestore] Falha ao ler revisões da ideia ${ideaId}:`, err);
+    return [];
+  }
+}
+
+export async function saveProjectRevisionToFirestore(revision: ProjectRevision): Promise<void> {
+  try {
+    const docRef = doc(db, REVISIONS_COLLECTION, revision.id);
+    const clean = cleanFirestoreData({
+      ...revision,
+      createdAt: revision.createdAt || new Date().toISOString(),
+    });
+    await setDoc(docRef, clean, { merge: true });
+  } catch (err) {
+    console.error(`[Firestore saveProjectRevision Error id=${revision.id}]:`, err);
+    throw err;
+  }
+}
+
+export function subscribeToProjectRevisions(
+  ideaId: string,
+  onUpdate: (items: ProjectRevision[]) => void,
+  onError?: (err: Error) => void
+) {
+  const colRef = collection(db, REVISIONS_COLLECTION);
+  const q = query(colRef, where('ideaId', '==', ideaId));
+  return onSnapshot(
+    q,
+    (snap) => {
+      const items: ProjectRevision[] = [];
+      snap.forEach((docSnap) => {
+        items.push({
+          ...docSnap.data(),
+          id: docSnap.id,
+        } as ProjectRevision);
+      });
+      items.sort((a, b) => (b.revisionNumber || 0) - (a.revisionNumber || 0));
+      onUpdate(items);
+    },
+    (error) => {
+      console.warn('[Firestore subscribeToProjectRevisions Error]:', error);
       if (onError) onError(error);
     }
   );

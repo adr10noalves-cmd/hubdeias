@@ -264,6 +264,47 @@ export interface RoadmapItem {
   status: 'Pendente' | 'Em Andamento' | 'Concluído';
 }
 
+export interface ProjectConcept {
+  summary: string;          // O conceito central transformado pela IA
+  coreValue: string;        // Proposta e tese de valor central
+  mechanics: string;        // Princípios de funcionamento e mecânica conceitual
+  marketFit?: string;       // Diferencial de mercado e posicionamento
+}
+
+export interface ProjectApplication {
+  realWorldUseCases: string[]; // Casos de uso práticos no mundo real
+  userFlow: string[];          // Fluxo do usuário passo a passo
+  businessRules: string[];     // Regras de negócio essenciais
+  architecture: string;        // Arquitetura prática de funcionamento
+}
+
+export interface ProjectStagePrompt {
+  id: string;
+  order: number;
+  title: string;              // Ex: "Etapa 1: Concepção & Modelagem" ... "Etapa Final: Produção & Lançamento"
+  phase: string;              // 'Concepção' | 'Arquitetura' | 'Backend' | 'Frontend' | 'Integrações' | 'Testes' | 'Deploy Final'
+  objective: string;          // Objetivo específico desta etapa
+  deliverable: string;        // O que é entregue ao final da etapa
+  prompt: string;             // O PROMPT PRONTO e completo para executar esta etapa com IAs
+  recommendedTools: string[]; // Ferramentas/IAs ideais para esta etapa
+  status: 'Pendente' | 'Em Andamento' | 'Concluído';
+  executionOutput?: string;   // Saída/código/artefato gerado pela IA ao executar o prompt
+}
+
+export interface ProjectRevision {
+  id: string;
+  ideaId: string;
+  userId?: string;
+  revisionNumber: number;      // 1, 2, 3... ilimitado/infinito
+  userRequest: string;         // O que o usuário pediu para a IA melhorar
+  improvementSummary: string;  // Resumo analítico do que a IA aprimorou
+  conceptChanges?: string;     // Como o conceito evoluiu
+  applicationChanges?: string; // Como a aplicação evoluiu
+  stagesChangedCount: number;
+  modelUsed?: string;
+  createdAt: string;
+}
+
 export interface IdeaItem {
   id: string;
   userId?: string;
@@ -279,6 +320,10 @@ export interface IdeaItem {
   relatedTechnologies: string[];
   relatedIANames: string[];
   currentVersion: string; // Ex: "V1", "V2", "V3"
+  revisionsCount?: number; // Quantidade de revisões infinitas realizadas com a IA
+  concept?: ProjectConcept; // Conceito teórico e arquitetura de valor gerada pela IA
+  application?: ProjectApplication; // Aplicação prática no mundo real gerada pela IA
+  stages?: ProjectStagePrompt[]; // As etapas e cada prompt até a etapa final
   observations?: string;
   nextSteps?: string;
   roadmap?: RoadmapItem[];
