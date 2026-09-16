@@ -18,6 +18,7 @@ import {
 } from '../../services/strategicMemoryService';
 import { MaturityStageBar } from './MaturityStageBar';
 import { IdeaDetailModal } from './IdeaDetailModal';
+import { AICoCreateProjectModal } from './AICoCreateProjectModal';
 import {
   Plus,
   Search,
@@ -31,6 +32,9 @@ import {
   Cpu,
   CheckCircle2,
   Calendar,
+  Wand2,
+  Bot,
+  Zap,
 } from 'lucide-react';
 
 interface IdeasManagerProps {
@@ -55,7 +59,10 @@ export const IdeasManager: React.FC<IdeasManagerProps> = ({
   const [activeIdea, setActiveIdea] = useState<IdeaItem | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
-  // Estado do Modal de Criação Rápida
+  // Estado do Modal de Co-Criação com IA
+  const [isCoCreateModalOpen, setIsCoCreateModalOpen] = useState(false);
+
+  // Estado do Modal de Criação Manual Rápida
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState<IdeaCategory>('Ideia Geral');
@@ -149,6 +156,35 @@ export const IdeasManager: React.FC<IdeasManagerProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Hero Banner: Arquiteto de Ideias & Projetos com IA */}
+      <div className="relative overflow-hidden p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950/40 to-cyan-950/40 border border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.15)]">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="space-y-1.5 max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 text-xs font-bold uppercase tracking-wider">
+              <Sparkles className="w-3.5 h-3.5 animate-pulse text-cyan-300" />
+              <span>Co-Criação Inteligente com IA</span>
+            </div>
+            <h2 className="text-lg sm:text-xl font-black text-white tracking-tight">
+              Arquiteto de Ideias & Projetos com IA
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+              Diga o que deseja criar em linguagem natural: a IA analisa, estrutura o escopo completo, roadmap em 4 horizontes, stack de tecnologias, estudos recomendados e <strong className="text-cyan-300">atrela tudo diretamente no banco de dados Firestore</strong>.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsCoCreateModalOpen(true)}
+              className="flex items-center justify-center gap-2.5 px-6 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-purple-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-extrabold text-xs sm:text-sm tracking-wide shadow-[0_0_25px_rgba(6,182,212,0.4)] hover:scale-[1.02] transition-all"
+            >
+              <Wand2 className="w-4 h-4 text-cyan-100 animate-spin-slow" />
+              <span>Co-criar Projeto com IA</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Top Filter Bar */}
       <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 p-4 rounded-2xl bg-slate-900/80 border border-cyan-500/20 backdrop-blur">
         <div className="relative flex-1">
@@ -205,14 +241,24 @@ export const IdeasManager: React.FC<IdeasManagerProps> = ({
             ))}
           </select>
 
-          {/* Botão Nova Ideia */}
+          {/* Botão Co-criar com IA */}
+          <button
+            type="button"
+            onClick={() => setIsCoCreateModalOpen(true)}
+            className="flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white font-bold text-xs sm:text-sm tracking-wide transition-all shadow-[0_0_15px_rgba(168,85,247,0.35)] hover:scale-[1.02]"
+          >
+            <Sparkles className="w-4 h-4 text-cyan-200" />
+            <span>Co-criar com IA</span>
+          </button>
+
+          {/* Botão Nova Ideia Manual */}
           <button
             type="button"
             onClick={() => setIsCreatingNew(true)}
-            className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white font-bold text-xs sm:text-sm tracking-wide transition-all shadow-[0_0_15px_rgba(6,182,212,0.35)] hover:scale-[1.02]"
+            className="flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold text-xs sm:text-sm tracking-wide transition-all"
           >
             <Plus className="w-4 h-4" />
-            <span>Nova Ideia / Projeto</span>
+            <span>Manual</span>
           </button>
         </div>
       </div>
@@ -456,6 +502,20 @@ export const IdeasManager: React.FC<IdeasManagerProps> = ({
           studies={studies}
           catalog={catalog}
           onSelectInCatalog={onSelectInCatalog}
+        />
+      )}
+
+      {/* Modal de Co-Criação com IA (Arquiteto de Ideias & Projetos) */}
+      {isCoCreateModalOpen && (
+        <AICoCreateProjectModal
+          isOpen={isCoCreateModalOpen}
+          onClose={() => setIsCoCreateModalOpen(false)}
+          catalog={catalog}
+          existingProjects={ideas.map((i) => ({ title: i.title, category: i.category }))}
+          onProjectCreated={(created) => {
+            setActiveIdea(created.idea);
+            setIsDetailModalOpen(true);
+          }}
         />
       )}
     </div>

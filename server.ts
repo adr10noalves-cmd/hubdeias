@@ -551,6 +551,156 @@ PERGUNTA ESPECÍFICA DO USUÁRIO: "${q}"`;
         return;
       }
 
+      case 'structure_project_with_ai': {
+        const { userRequest, categoryHint, catalog, existingProjects } = payload || {};
+        const requestText = String(userRequest || '').trim();
+
+        if (!requestText) {
+          res.status(400).json({ error: 'userRequest é obrigatório.' });
+          return;
+        }
+
+        const catalogList = Array.isArray(catalog) ? catalog : [];
+        const catalogSummary = catalogList
+          .slice(0, 45)
+          .map((i: any) => `- ${i.name} (Cat: ${i.category}): ${i.specialty}`)
+          .join('\n');
+
+        const existingSummary = Array.isArray(existingProjects) && existingProjects.length > 0
+          ? existingProjects.map((p: any) => `- ${p.title} (${p.category})`).join('\n')
+          : 'Nenhum projeto cadastrado anteriormente.';
+
+        const systemPrompt = `Você é o ARQUITETO ESTRATÉGICO DE PROJETOS, SISTEMAS E IA do Hub drico IAS.
+Sua missão é pegar uma solicitação em linguagem natural de um usuário e transformá-la em uma ESTRUTURA COMPLETA, PROFISSIONAL E EXECUTÁVEL DE PROJETO / IDEIA que será atrelada diretamente ao banco de dados Firestore.
+
+DIRETRIZES FUNDAMENTAIS:
+1. NÃO SEJA GENÉRICO: Se o usuário falou sobre SST, laudos, automação, SaaS ou WhatsApp, seja extremamente específico, cite termos reais da área e dores autênticas.
+2. CATEGORIAS VÁLIDAS: "Projeto" | "Estudo" | "IA" | "SST" | "Automação" | "Negócios" | "Software" | "Pesquisa" | "Produto" | "Outros". Escolha a mais precisa. Se o usuário forneceu a dica "${categoryHint || ''}", leve em conta.
+3. ESTÁGIOS VÁLIDOS (Maturidade 1 a 9): "1. Ideia" | "2. Exploração" | "3. Planejamento" | "4. Protótipo" | "5. MVP" | "6. Validação" | "7. Implementação" | "8. Otimização" | "9. Evolução". Comece geralmente em "1. Ideia", "2. Exploração" ou "3. Planejamento", a menos que o usuário já tenha algo pronto.
+4. PRIORIDADE: "Baixa" | "Média" | "Alta" | "Crítica".
+5. ROADMAP EM 4 HORIZONTES:
+   - "Atual": Ações imediatas para colocar o projeto de pé ou validar o escopo inicial (status: "Em Andamento").
+   - "Próxima Evolução": Funcionalidade chave subsequente (status: "Pendente").
+   - "Depois": Integração avançada ou expansão (status: "Pendente").
+   - "Futuro": Visão de longo prazo ou escala automatizada (status: "Pendente").
+6. SELEÇÃO DE IAs DO CATÁLOGO: Escolha entre as IAs do catálogo fornecido aquelas que realmente agregam valor ao projeto.
+7. ESTUDOS COMPLEMENTARES SUGERIDOS: Sugira de 1 a 2 temas práticos para o Banco de Estudos que ajudarão o usuário a dominar o conhecimento necessário para construir esse projeto.
+8. DIÁRIO DE BORDO INICIAL: Crie uma anotação reflexiva da fundação do projeto registrando as hipóteses e decisões iniciais.
+
+CATÁLOGO DE IAs DISPONÍVEL NO HUB:
+${catalogSummary}
+
+PROJETOS JÁ EXISTENTES NO HUB DO USUÁRIO:
+${existingSummary}
+
+Retorne EXCLUSIVAMENTE em formato JSON estrito:
+{
+  "title": "Nome marcante e profissional do projeto",
+  "description": "Resumo executivo de 2 a 3 frases explicando o que é e como funciona",
+  "category": "Categoria selecionada dentre as válidas",
+  "stage": "Estágio de maturidade inicial",
+  "priority": "Média" | "Alta" | "Crítica" | "Baixa",
+  "objective": "Objetivo central claro, mensurável e com foco em resultado",
+  "problemSolved": "Problemas concretos, dores do mercado ou processos manuais que ele elimina",
+  "targetAudience": "Público-alvo, clientes potenciais ou personas beneficiadas",
+  "relatedTechnologies": ["Stack 1", "Stack 2", "Stack 3", "Stack 4"],
+  "relatedIANames": ["Nome da IA existente no catálogo 1", "Nome da IA 2"],
+  "observations": "Observações arquiteturais estratégicas e diferenciais competitivos",
+  "nextSteps": "Primeira tarefa prática e acionável para o usuário começar imediatamente hoje",
+  "roadmap": [
+    { "stageTitle": "Atual", "goal": "Meta imediata para o momento atual", "status": "Em Andamento" },
+    { "stageTitle": "Próxima Evolução", "goal": "Próxima meta estruturante", "status": "Pendente" },
+    { "stageTitle": "Depois", "goal": "Meta de consolidação e novas funcionalidades", "status": "Pendente" },
+    { "stageTitle": "Futuro", "goal": "Meta de longo prazo, automação avançada ou escala", "status": "Pendente" }
+  ],
+  "initialDiaryLog": {
+    "text": "Texto do registro de abertura no Diário de Bordo descrevendo o ponto de partida, a hipótese validada e o direcionamento inicial do projeto.",
+    "category": "Decisão",
+    "impact": "Definição do escopo inicial, direcionamento tecnológico e premissas fundamentais da V1."
+  },
+  "suggestedStudies": [
+    {
+      "theme": "Nome do tema de estudo recomendado",
+      "objective": "O que o usuário deve aprender para viabilizar e acelerar esse projeto",
+      "level": "Iniciante" | "Intermediário" | "Avançado",
+      "toolsUsed": ["Nome de ferramenta ou biblioteca recomendada"]
+    }
+  ],
+  "versionNote": "Estrutura V1 concebida em co-criação com o Arquiteto de IA do Hub"
+}`;
+
+        const userPrompt = `SOLICITAÇÃO DO USUÁRIO PARA CO-CRIAR PROJETO:\n"${requestText}"`;
+        const { parsed, modelUsed } = await callGroqWithFallback(systemPrompt, userPrompt, 2500);
+        res.json({ success: true, ...parsed, modelUsed });
+        return;
+      }
+
+      case 'evolve_project_with_ai': {
+        const { idea, userRequest, historyVersions, evolutionLogs, catalog } = payload || {};
+        const requestText = String(userRequest || '').trim();
+
+        if (!idea || !idea.id) {
+          res.status(400).json({ error: 'idea é obrigatório.' });
+          return;
+        }
+
+        const systemPrompt = `Você é o ARQUITETO DE EVOLUÇÃO CONTÍNUA DE PROJETOS E VERSÕES do Hub drico IAS.
+O usuário possui um projeto já cadastrado e quer evoluí-lo em co-criação com você (ex: criar uma nova versão V2/V3, refinar o roadmap, adicionar novos recursos ou mudar a tecnologia).
+
+SEU PAPEL:
+1. Propor o incremento de versão (ex: se era V1, propor V2; se era V2, propor V3).
+2. Definir o que mudou, o motivo da mudança e a decisão técnica/estratégica tomada.
+3. Atualizar o roadmap nos 4 horizontes (Atual, Próxima Evolução, Depois, Futuro).
+4. Gerar um novo registro no diário de bordo sobre essa evolução.
+5. Recomendar tecnologias e IAs adicionais se necessário.
+6. Propor novos estudos se a evolução demandar novos conhecimentos.
+
+Retorne em formato JSON estrito:
+{
+  "newVersion": "V2",
+  "changedSummary": "Resumo objetivo do que foi alterado e ampliado nesta versão",
+  "changeReason": "Motivação estratégica do usuário para esta evolução",
+  "decisionTaken": "Decisões arquiteturais e de produto adotadas",
+  "nextStep": "Próxima ação prioritária desta nova versão",
+  "updatedStage": "Estágio de maturidade atualizado (se mudou) ou manter o atual",
+  "updatedRoadmap": [
+    { "stageTitle": "Atual", "goal": "Nova meta atual", "status": "Em Andamento" },
+    { "stageTitle": "Próxima Evolução", "goal": "Nova próxima meta", "status": "Pendente" },
+    { "stageTitle": "Depois", "goal": "Nova meta posterior", "status": "Pendente" },
+    { "stageTitle": "Futuro", "goal": "Nova meta de futuro", "status": "Pendente" }
+  ],
+  "addedTechnologies": ["Tecnologia nova adicionada"],
+  "addedIANames": ["IA nova recomendada"],
+  "evolutionLog": {
+    "text": "Reflexão sobre a transição para esta nova versão",
+    "category": "Decisão",
+    "impact": "Impacto desta evolução no projeto"
+  },
+  "suggestedNewStudies": [
+    {
+      "theme": "Nome do estudo",
+      "objective": "Objetivo do estudo",
+      "level": "Intermediário"
+    }
+  ]
+}`;
+
+        const userPrompt = `PROJETO ATUAL:
+- Título: ${idea.title}
+- Versão Atual: ${idea.currentVersion || 'V1'}
+- Estágio: ${idea.stage}
+- Categoria: ${idea.category}
+- Objetivo: ${idea.objective}
+- Tecnologias: ${(idea.relatedTechnologies || []).join(', ')}
+
+PEDIDO DE EVOLUÇÃO DO USUÁRIO:
+"${requestText}"`;
+
+        const { parsed, modelUsed } = await callGroqWithFallback(systemPrompt, userPrompt, 2048);
+        res.json({ success: true, ...parsed, modelUsed });
+        return;
+      }
+
       default:
         res.status(400).json({ error: `Ação "${action}" não reconhecida.` });
         return;
