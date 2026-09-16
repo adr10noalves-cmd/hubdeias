@@ -6,5 +6,30 @@ service cloud.firestore {
       allow read: if true;
       allow write: if true;
     }
+
+    // Central de Ideias e Projetos
+    match /ideas/{ideaId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Histórico de versões de ideias
+    match /idea_versions/{versionId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Diário de evolução e pensamentos
+    match /evolution_logs/{logId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Banco de estudos
+    match /studies/{studyId} {
+      allow read: if true;
+      allow write: if true;
+    }
   }
 }
+

@@ -185,3 +185,169 @@ export interface CatalogQueryAnswer {
   highlights: string[];
 }
 
+// ==========================================
+// 💡 MEMÓRIA ESTRATÉGICA: IDEIAS, EVOLUÇÃO E ESTUDOS
+// ==========================================
+
+export type IdeaCategory =
+  | 'Projeto'
+  | 'Estudo'
+  | 'IA'
+  | 'SST'
+  | 'Automação'
+  | 'Negócios'
+  | 'Software'
+  | 'Pesquisa'
+  | 'Produto'
+  | 'Outros';
+
+export const IDEA_CATEGORIES: IdeaCategory[] = [
+  'Projeto',
+  'Estudo',
+  'IA',
+  'SST',
+  'Automação',
+  'Negócios',
+  'Software',
+  'Pesquisa',
+  'Produto',
+  'Outros',
+];
+
+export type IdeaStage =
+  | '1. Ideia'
+  | '2. Exploração'
+  | '3. Planejamento'
+  | '4. Protótipo'
+  | '5. Desenvolvimento'
+  | '6. Teste'
+  | '7. Validação'
+  | '8. Produção'
+  | '9. Evolução';
+
+export const IDEA_STAGES: IdeaStage[] = [
+  '1. Ideia',
+  '2. Exploração',
+  '3. Planejamento',
+  '4. Protótipo',
+  '5. Desenvolvimento',
+  '6. Teste',
+  '7. Validação',
+  '8. Produção',
+  '9. Evolução',
+];
+
+export type IdeaPriority = 'Baixa' | 'Média' | 'Alta' | 'Crítica';
+export const IDEA_PRIORITIES: IdeaPriority[] = ['Baixa', 'Média', 'Alta', 'Crítica'];
+
+export type IdeaStatus =
+  | 'Rascunho'
+  | 'Ativa'
+  | 'Em Progresso'
+  | 'Pausada'
+  | 'Concluída'
+  | 'Arquivada';
+
+export const IDEA_STATUSES: IdeaStatus[] = [
+  'Rascunho',
+  'Ativa',
+  'Em Progresso',
+  'Pausada',
+  'Concluída',
+  'Arquivada',
+];
+
+export interface RoadmapItem {
+  id: string;
+  stageTitle: string; // Ex: "Atual", "Próxima Evolução", "Depois", "Futuro"
+  goal: string;
+  status: 'Pendente' | 'Em Andamento' | 'Concluído';
+}
+
+export interface IdeaItem {
+  id: string;
+  userId?: string;
+  title: string;
+  description: string;
+  category: IdeaCategory;
+  objective: string;
+  problemSolved: string;
+  targetAudience: string;
+  stage: IdeaStage;
+  priority: IdeaPriority;
+  status: IdeaStatus;
+  relatedTechnologies: string[];
+  relatedIANames: string[];
+  currentVersion: string; // Ex: "V1", "V2", "V3"
+  observations?: string;
+  nextSteps?: string;
+  roadmap?: RoadmapItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IdeaVersion {
+  id: string;
+  ideaId: string;
+  userId?: string;
+  version: string;
+  changedSummary: string; // O que mudou
+  changeReason: string; // Motivo da mudança
+  decisionTaken: string; // Decisão tomada
+  nextStep: string; // Próximo passo
+  observations?: string;
+  createdAt: string;
+}
+
+export type EvolutionLogCategory =
+  | 'Descoberta'
+  | 'Decisão'
+  | 'Aprendizado'
+  | 'Obstáculo'
+  | 'Teste'
+  | 'Ideia'
+  | 'Validação';
+
+export const EVOLUTION_LOG_CATEGORIES: EvolutionLogCategory[] = [
+  'Descoberta',
+  'Decisão',
+  'Aprendizado',
+  'Obstáculo',
+  'Teste',
+  'Ideia',
+  'Validação',
+];
+
+export interface EvolutionLog {
+  id: string;
+  ideaId: string;
+  userId?: string;
+  text: string;
+  category: EvolutionLogCategory;
+  impact: string; // Impacto na ideia/projeto
+  createdAt: string;
+}
+
+export type StudyLevel = 'Iniciante' | 'Intermediário' | 'Avançado';
+export const STUDY_LEVELS: StudyLevel[] = ['Iniciante', 'Intermediário', 'Avançado'];
+
+export interface StudyItem {
+  id: string;
+  userId?: string;
+  theme: string;
+  objective: string;
+  level: StudyLevel;
+  acquiredKnowledge: string;
+  doubts: string;
+  sources: string[];
+  toolsUsed: string[];
+  exercises: string;
+  conclusions: string;
+  nextSubjects: string;
+  progress: number; // 0-100
+  relatedProjectIds: string[]; // IDs das ideias/projetos relacionados
+  createdAt: string;
+  updatedAt: string;
+}
+
+

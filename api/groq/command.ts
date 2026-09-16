@@ -488,6 +488,104 @@ Retorne em JSON estrito:
         return;
       }
 
+      case 'evolve_idea_analysis': {
+        const { idea, historyVersions, evolutionLogs, relatedStudies, catalog, userQuestion } = payload || {};
+        const q = userQuestion ? String(userQuestion) : 'Como posso evoluir esse projeto/ideia estrategicamente?';
+        const catalogList = Array.isArray(catalog) ? catalog : [];
+        const catalogSummary = catalogList
+          .slice(0, 40)
+          .map((i: any) => `- ${i.name} (${i.category}): ${i.specialty}`)
+          .join('\n');
+
+        const versionsSummary = Array.isArray(historyVersions) && historyVersions.length > 0
+          ? historyVersions.map((v: any) => `[${v.version}] Mudança: ${v.changedSummary} | Motivo: ${v.changeReason} | Decisão: ${v.decisionTaken}`).join('\n')
+          : 'Nenhuma versão anterior registrada.';
+
+        const logsSummary = Array.isArray(evolutionLogs) && evolutionLogs.length > 0
+          ? evolutionLogs.slice(-10).map((l: any) => `[${l.category}] ${l.text} (Impacto: ${l.impact})`).join('\n')
+          : 'Nenhum log do diário registrado.';
+
+        const studiesSummary = Array.isArray(relatedStudies) && relatedStudies.length > 0
+          ? relatedStudies.map((s: any) => `- Estudo: ${s.theme} (Nível: ${s.level}, Progresso: ${s.progress}%). Aprendizado: ${s.acquiredKnowledge}. Dúvidas: ${s.doubts}`).join('\n')
+          : 'Nenhum estudo vinculado ainda.';
+
+        const systemPrompt = `Você é o ASSISTENTE DE EVOLUÇÃO ESTRATÉGICA DE PROJETOS E IDEIAS do Hub drico IAS.
+Sua função é analisar profundamente o contexto armazenado do projeto do usuário:
+- Objetivo original e problema que pretende resolver
+- Estágio de maturidade atual (1. Ideia até 9. Evolução)
+- Histórico de versões anteriores
+- Diário de bordo (pensamentos, descobertas, obstáculos, decisões)
+- Estudos e conhecimentos adquiridos relacionados
+- Tecnologias e IAs relacionadas
+
+REGRAS:
+1. Responda em Português do Brasil (pt-BR) com tom profissional, prático, objetivo e visionário.
+2. Analise os gargalos e proponha passos de evolução reais e viáveis.
+3. Se houver IAs no catálogo que acelerem o projeto, cite-as expressamente.
+4. NUNCA altere ou sobrescreva dados do usuário. Suas propostas devem vir em formato de sugestões estruturadas para o usuário aceitar, editar ou rejeitar.
+
+Retorne em formato JSON estrito:
+{
+  "summaryAnalysis": "Diagnóstico do estado atual do projeto/ideia com pontos fortes e principais desafios",
+  "suggestedEvolutions": [
+    {
+      "title": "Título da evolução recomendada",
+      "changeReason": "Por que essa mudança é estratégica",
+      "decisionTaken": "Decisão técnica ou de produto proposta",
+      "nextStep": "Próxima ação prática a executar",
+      "impact": "Alto impacto na arquitetura / validação / negócio"
+    }
+  ],
+  "suggestedRoadmap": [
+    {
+      "stageTitle": "Atual",
+      "goal": "Meta clara e mensurável",
+      "status": "Pendente"
+    }
+  ],
+  "recommendedStudies": [
+    {
+      "theme": "Nome do tema a estudar",
+      "objective": "Objetivo de aprendizado para destravar o projeto",
+      "recommendedTools": ["NomeIA1", "NomeIA2"]
+    }
+  ],
+  "recommendedCatalogTools": ["Nome da IA do catálogo útil para esta fase"]
+}`;
+
+        const userPrompt = `PROJETO/IDEIA ANALISADO:
+- Título: ${idea?.title || 'Sem título'}
+- Categoria: ${idea?.category || 'Projeto'}
+- Estágio de Maturidade: ${idea?.stage || '1. Ideia'}
+- Status: ${idea?.status || 'Ativa'}
+- Versão Atual: ${idea?.currentVersion || 'V1'}
+- Objetivo: ${idea?.objective || 'Não informado'}
+- Problema que Resolve: ${idea?.problemSolved || 'Não informado'}
+- Público-Alvo: ${idea?.targetAudience || 'Não informado'}
+- Tecnologias: ${Array.isArray(idea?.relatedTechnologies) ? idea.relatedTechnologies.join(', ') : 'Nenhuma'}
+- IAs Relacionadas: ${Array.isArray(idea?.relatedIANames) ? idea.relatedIANames.join(', ') : 'Nenhuma'}
+- Observações: ${idea?.observations || 'Nenhuma'}
+- Próximos Passos: ${idea?.nextSteps || 'Nenhum'}
+
+HISTÓRICO DE VERSÕES:
+${versionsSummary}
+
+DIÁRIO DE EVOLUÇÃO (ÚLTIMAS NOTAS):
+${logsSummary}
+
+ESTUDOS VINCULADOS:
+${studiesSummary}
+
+CATÁLOGO DE IAs DISPONÍVEL NO HUB:
+${catalogSummary}
+
+PERGUNTA ESPECÍFICA DO USUÁRIO: "${q}"`;
+
+        const { parsed, modelUsed } = await callGroqWithFallback(systemPrompt, userPrompt, 2048);
+        res.json({ success: true, ...parsed, modelUsed });
+        return;
+      }
+
       default:
         res.status(400).json({ error: `Ação "${action}" não reconhecida.` });
         return;

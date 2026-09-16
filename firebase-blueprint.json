@@ -39,12 +39,111 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "name", "category", "link"]
+    },
+    "ideas": {
+      "title": "Central de Ideias e Projetos",
+      "description": "Ideias e projetos estratégicos do usuário com estágio, versões e metas",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "objective": { "type": "string" },
+        "problemSolved": { "type": "string" },
+        "targetAudience": { "type": "string" },
+        "stage": { "type": "string" },
+        "priority": { "type": "string" },
+        "status": { "type": "string" },
+        "relatedTechnologies": { "type": "array", "items": { "type": "string" } },
+        "relatedIANames": { "type": "array", "items": { "type": "string" } },
+        "currentVersion": { "type": "string" },
+        "observations": { "type": "string" },
+        "nextSteps": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "title", "category", "stage", "status"]
+    },
+    "idea_versions": {
+      "title": "Histórico de Evolução de Ideias",
+      "description": "Registro de versões (V1, V2, V3) com motivos de mudança e decisões tomadas",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ideaId": { "type": "string" },
+        "userId": { "type": "string" },
+        "version": { "type": "string" },
+        "changedSummary": { "type": "string" },
+        "changeReason": { "type": "string" },
+        "decisionTaken": { "type": "string" },
+        "nextStep": { "type": "string" },
+        "observations": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "ideaId", "version", "changedSummary"]
+    },
+    "evolution_logs": {
+      "title": "Diário de Bordo e Evolução",
+      "description": "Pensamentos diários, descobertas, decisões e impactos associados a uma ideia",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ideaId": { "type": "string" },
+        "userId": { "type": "string" },
+        "text": { "type": "string" },
+        "category": { "type": "string" },
+        "impact": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "ideaId", "text", "category"]
+    },
+    "studies": {
+      "title": "Banco de Estudos e Conhecimentos",
+      "description": "Estudos estruturados com temas, dúvidas, conclusões e relação com projetos",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "theme": { "type": "string" },
+        "objective": { "type": "string" },
+        "level": { "type": "string" },
+        "acquiredKnowledge": { "type": "string" },
+        "doubts": { "type": "string" },
+        "sources": { "type": "array", "items": { "type": "string" } },
+        "toolsUsed": { "type": "array", "items": { "type": "string" } },
+        "exercises": { "type": "string" },
+        "conclusions": { "type": "string" },
+        "nextSubjects": { "type": "string" },
+        "progress": { "type": "number" },
+        "relatedProjectIds": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "theme", "level", "progress"]
     }
   },
   "firestore": {
     "/ias/{iaId}": {
-      "entity": "ias",
+      "schema": "ias",
       "description": "Catálogo público compartilhado de inteligências artificiais"
+    },
+    "/ideas/{ideaId}": {
+      "schema": "ideas",
+      "description": "Ideias e projetos do usuário"
+    },
+    "/idea_versions/{versionId}": {
+      "schema": "idea_versions",
+      "description": "Versões históricas das ideias do usuário"
+    },
+    "/evolution_logs/{logId}": {
+      "schema": "evolution_logs",
+      "description": "Notas do diário de evolução das ideias"
+    },
+    "/studies/{studyId}": {
+      "schema": "studies",
+      "description": "Banco de estudos e aprendizados do usuário"
     }
   }
 }
