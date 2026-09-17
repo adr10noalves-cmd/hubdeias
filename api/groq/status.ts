@@ -1,7 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-
-const GROQ_API_KEY =
-  process.env.GROQ_API_KEY || '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';
+import { GROQ_MODELS, DEFAULT_GROQ_MODEL } from '../_shared/groqAdapter';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -13,11 +11,15 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
+  const groqKey = process.env.GROQ_API_KEY;
+  const isConfigured = Boolean(groqKey && groqKey.startsWith('gsk_'));
+
   res.json({
-    status: 'ok',
-    configured: Boolean(GROQ_API_KEY && GROQ_API_KEY.startsWith('gsk_')),
+    status: isConfigured ? 'ok' : 'unconfigured',
+    configured: isConfigured,
     engine: 'Groq Cloud Inference (Vercel Serverless Ready)',
-    models: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'],
+    models: GROQ_MODELS,
+    defaultModel: DEFAULT_GROQ_MODEL,
     timestamp: new Date().toISOString(),
   });
 }

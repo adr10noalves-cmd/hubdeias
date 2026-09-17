@@ -31,7 +31,7 @@ export async function executeScenarioSimulation(params: {
   modelId?: string;
 }): Promise<SimulationResult> {
   const startTime = Date.now();
-  const { objective, context, modelId = 'openai/gpt-oss-120b' } = params;
+  const { objective, context, modelId = 'llama-3.3-70b-versatile' } = params;
 
   const payload = {
     action: 'simulate_scenario',

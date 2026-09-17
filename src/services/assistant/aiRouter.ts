@@ -1,5 +1,5 @@
 import { AIModelRecommendation, IAItem } from '../../types';
-import { analyzeTaskComplexity, TaskComplexityAnalysis, ComplexityLevel } from './taskComplexity';
+import { analyzeTaskComplexity, TaskComplexityAnalysis } from './taskComplexity';
 import { getOrchestratorSettings, OrchestratorSettings } from './orchestratorConfig';
 import { FilteredTaskContext } from './contextBuilder';
 
@@ -25,7 +25,7 @@ export interface ModelRouteDecision {
  * TASK → CLASSIFY → SCORE COMPLEXITY → CHECK CONTEXT → SELECT MODEL
  * 
  * Regras:
- * - NÍVEL 1 (Simples)      → Groq (alta velocidade, custo zero)
+ * - NÍVEL 1 (Simples)      → Groq (alta velocidade, inferência ultrarrápida)
  * - NÍVEL 2 (Intermediário)→ Groq ou Gemini conforme configuração/carga
  * - NÍVEL 3 (Complexo)     → Gemini preferencialmente (arquitetura, programação, documentos)
  * - NÍVEL 4 (Estratégico)  → Gemini prioritariamente (evolução de projetos, memória histórica profunda)
@@ -58,8 +58,8 @@ export function routeAITaskOrchestrated(params: {
 
   // 2. DECISÃO DE PROVEDOR BASEADO EM CONFIGURAÇÕES E NÍVEL
   let provider: 'GEMINI' | 'GROQ' = 'GEMINI';
-  let modelId = 'gemini-2.5-pro';
-  let modelName = 'Gemini 2.5 Pro (Google DeepMind)';
+  let modelId = 'gemini-3.8-flash';
+  let modelName = 'Gemini 3.8 Flash (Google DeepMind)';
   let reasoning = '';
 
   // Modo Simulação força Groq em Sandbox
@@ -79,9 +79,9 @@ export function routeAITaskOrchestrated(params: {
           reasoning = 'Tarefa classificada como Nível 1 (Simples). Otimizada para retorno ultra-rápido com o motor Groq.';
         } else {
           provider = 'GEMINI';
-          modelId = 'gemini-2.5-flash';
-          modelName = 'Gemini 2.5 Flash';
-          reasoning = 'Execução ágil via Gemini 2.5 Flash de baixa latência.';
+          modelId = 'gemini-3.8-flash';
+          modelName = 'Gemini 3.8 Flash';
+          reasoning = 'Execução ágil via Gemini 3.8 Flash de baixa latência.';
         }
         break;
       }
@@ -93,31 +93,31 @@ export function routeAITaskOrchestrated(params: {
           reasoning = 'Tarefa classificada como Nível 2 (Intermediária). Groq GPT-OSS 120B oferece alto desempenho e agilidade.';
         } else {
           provider = 'GEMINI';
-          modelId = 'gemini-2.5-flash';
-          modelName = 'Gemini 2.5 Flash';
-          reasoning = 'Tarefa intermediária atribuída ao Gemini 2.5 Flash para geração consistente e estruturada.';
+          modelId = 'gemini-3.8-flash';
+          modelName = 'Gemini 3.8 Flash';
+          reasoning = 'Tarefa intermediária atribuída ao Gemini 3.8 Flash para geração consistente e estruturada.';
         }
         break;
       }
       case 3: { // Nível 3 - Complexo (Código, Arquitetura, Análise Documental)
         if (settings.geminiEnabled) {
           provider = 'GEMINI';
-          modelId = settings.geminiDefaultModel || 'gemini-2.5-pro';
-          modelName = 'Gemini 2.5 Pro (Engenharia & Raciocínio)';
+          modelId = settings.geminiDefaultModel || 'gemini-3.8-flash';
+          modelName = 'Gemini 3.8 Flash (Engenharia & Raciocínio)';
           reasoning = 'Tarefa de Nível 3 (Complexa). Raciocínio analítico avançado e programação profunda direcionados ao modelo principal Gemini.';
         } else {
           provider = 'GROQ';
           modelId = 'openai/gpt-oss-120b';
           modelName = 'Groq GPT-OSS 120B (Fallback de Complexidade)';
-          reasoning = 'Gemini desativado nas configurações; roteando excepcionalmente para Groq 120B.';
+          reasoning = 'Gemini desativado nas configurações; roteando excepcionalmente para Groq GPT-OSS 120B.';
         }
         break;
       }
       case 4: { // Nível 4 - Estratégico (Evolução de Projetos, Memória Histórica)
         provider = 'GEMINI';
-        modelId = 'gemini-2.5-pro';
-        modelName = 'Gemini 2.5 Pro (Estratégia & Memória Longa)';
-        reasoning = 'Tarefa de Nível 4 (Estratégica). Decisões fundamentais de arquitetura e evolução do projeto requerem a janela de contexto máxima e raciocínio profundo do Gemini.';
+        modelId = 'gemini-3.8-flash';
+        modelName = 'Gemini 3.8 Flash (Estratégia & Memória Longa)';
+        reasoning = 'Tarefa de Nível 4 (Estratégica). Decisões fundamentais de arquitetura e evolução do projeto requerem raciocínio do Gemini.';
         break;
       }
     }
@@ -131,15 +131,15 @@ export function routeAITaskOrchestrated(params: {
     reasoning += ` [Atenção: Redirecionado para Groq devido a ${previousErrorsCount} oscilação(ões) recente(s)].`;
   } else if (previousErrorsCount > 0 && provider === 'GROQ' && settings.geminiEnabled) {
     provider = 'GEMINI';
-    modelId = 'gemini-2.5-flash';
-    modelName = 'Gemini 2.5 Flash (Fallback Resiliente)';
+    modelId = 'gemini-3.8-flash';
+    modelName = 'Gemini 3.8 Flash (Fallback Resiliente)';
     reasoning += ` [Atenção: Redirecionado para Gemini devido a ${previousErrorsCount} oscilação(ões) recente(s)].`;
   }
 
   // Configuração de Fallback Primário Bidirecional
   const primaryFallback: ModelRouteDecision['primaryFallback'] = provider === 'GEMINI'
     ? { provider: 'GROQ', modelId: 'openai/gpt-oss-120b', modelName: 'Groq GPT-OSS 120B (Fallback)' }
-    : { provider: 'GEMINI', modelId: 'gemini-2.5-flash', modelName: 'Gemini 2.5 Flash (Fallback)' };
+    : { provider: 'GEMINI', modelId: 'gemini-3.8-flash', modelName: 'Gemini 3.8 Flash (Fallback)' };
 
   const recommendedModel: AIModelRecommendation = {
     modelId,
@@ -161,8 +161,6 @@ export function routeAITaskOrchestrated(params: {
     },
   ];
 
-  const estimatedLatencyMs = provider === 'GROQ' ? 650 : 1800;
-
   return {
     provider,
     modelId,
@@ -172,40 +170,7 @@ export function routeAITaskOrchestrated(params: {
     primaryFallback,
     recommendedModel,
     alternativeModels,
-    executionStrategy: `Orquestração Nível ${complexity.level} (${complexity.levelName}) via ${provider} com fallback para ${primaryFallback.provider}.`,
-    estimatedLatencyMs,
-  };
-}
-
-// Mantém compatibilidade retroativa para módulos que chamavam routeAITask
-export function routeAITask(params: {
-  taskText: string;
-  isSimulation?: boolean;
-  catalogIAs?: IAItem[];
-}) {
-  const dummyContext: FilteredTaskContext = {
-    objective: params.taskText,
-    recentChangesSummary: [],
-    knownProblems: [],
-    pastDecisions: [],
-    nextSteps: [],
-    relevantStudies: [],
-    contextSummaryText: '',
-    tokensEstimated: 50,
-  };
-  const decision = routeAITaskOrchestrated({
-    userTask: params.taskText,
-    context: dummyContext,
-    isSimulation: params.isSimulation,
-    catalogIAs: params.catalogIAs,
-  });
-
-  return {
-    recommendedModel: decision.recommendedModel,
-    alternativeModels: decision.alternativeModels,
-    taskType: decision.complexity.level >= 3 ? ('CÓDIGO' as const) : ('GERAL' as const),
-    complexity: decision.complexity.level >= 3 ? ('ALTA' as const) : decision.complexity.level === 2 ? ('MÉDIA' as const) : ('BAIXA' as const),
-    estimatedCost: 'GRATUITO' as const,
-    executionStrategy: decision.executionStrategy,
+    executionStrategy: `Nível ${complexity.level} (${complexity.levelName}) com fallback resiliente para ${primaryFallback.provider}`,
+    estimatedLatencyMs: provider === 'GROQ' ? 450 : 1200,
   };
 }

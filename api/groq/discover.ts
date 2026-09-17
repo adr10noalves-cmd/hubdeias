@@ -1,10 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-
-// Chave da Groq com fallback para a chave de produção
-const GROQ_API_KEY =
-  process.env.GROQ_API_KEY || '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';
-
-const GROQ_MODELS = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'];
+import { executeGroq } from '../_shared/groqAdapter';
+import { executeGemini } from '../_shared/geminiAdapter';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers
@@ -31,15 +27,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!taskDescription || typeof taskDescription !== 'string') {
       res.status(400).json({ error: 'taskDescription é obrigatório' });
-      return;
-    }
-
-    if (!GROQ_API_KEY) {
-      res.status(503).json({
-        success: false,
-        fallback: true,
-        error: 'GROQ_API_KEY não configurada no servidor',
-      });
       return;
     }
 
@@ -86,76 +73,61 @@ ${existingNamesList || 'Nenhuma informada'}
 
 Retorne os candidatos a novas IAs em formato JSON estrito conforme solicitado.`;
 
-    let groqResponse: Response | null = null;
-    let modelUsed = '';
+    // 1. Tenta Groq primeiro
+    let executionResult = await executeGroq({
+      systemPrompt,
+      userPrompt,
+      jsonMode: true,
+      maxTokens: 2500,
+    });
 
-    for (const model of GROQ_MODELS) {
-      try {
-        const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${GROQ_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model,
-            response_format: { type: 'json_object' },
-            messages: [
-              { role: 'system', content: systemPrompt },
-              { role: 'user', content: userPrompt },
-            ],
-            temperature: 0.2,
-            max_tokens: 2048,
-          }),
-        });
+    // 2. Se Groq falhar, fallback transparente para Gemini
+    if (!executionResult.success) {
+      console.warn('[Vercel Groq Discover] Falhou, tentando fallback para Gemini:', executionResult.error);
+      const geminiResult = await executeGemini({
+        systemPrompt,
+        userPrompt,
+        jsonMode: true,
+      });
 
-        if (resp.ok) {
-          groqResponse = resp;
-          modelUsed = model;
-          break;
-        }
-      } catch (e) {
-        console.warn(`[Vercel Serverless Groq Model ${model}] erro:`, e);
+      if (geminiResult.success) {
+        executionResult = {
+          success: true,
+          content: geminiResult.content,
+          parsed: geminiResult.parsed,
+          modelUsed: `${geminiResult.modelUsed} (Gemini Fallback)`,
+          latencyMs: geminiResult.latencyMs,
+          status: 'concluído',
+        };
       }
     }
 
-    if (!groqResponse) {
+    if (!executionResult.success) {
       res.status(502).json({
         success: false,
         fallback: true,
-        error: 'Todos os modelos Groq retornaram erro ou quota esgotada.',
+        error: executionResult.error || 'Falha em todos os motores de descoberta.',
       });
       return;
     }
 
-    const data: any = await groqResponse.json();
-    const content = data?.choices?.[0]?.message?.content || '{}';
+    const parsed = executionResult.parsed || {};
+    const candidates = Array.isArray(parsed.candidates)
+      ? parsed.candidates
+      : Array.isArray(parsed)
+      ? parsed
+      : [];
 
-    try {
-      const parsed = JSON.parse(content);
-      const candidates = Array.isArray(parsed.candidates)
-        ? parsed.candidates
-        : Array.isArray(parsed)
-        ? parsed
-        : [];
-      res.json({
-        success: true,
-        candidates,
-        modelUsed,
-      });
-    } catch {
-      res.json({
-        success: true,
-        candidates: [],
-        modelUsed,
-        rawContent: content,
-      });
-    }
+    res.json({
+      success: true,
+      candidates,
+      modelUsed: executionResult.modelUsed,
+    });
   } catch (error: any) {
     res.status(500).json({
       success: false,
       fallback: true,
-      error: error?.message || 'Erro interno no servidor de curadoria Groq',
+      error: error?.message || 'Erro interno no servidor de curadoria de IAs',
     });
   }
 }

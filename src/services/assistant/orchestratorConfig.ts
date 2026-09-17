@@ -2,8 +2,8 @@ export interface OrchestratorSettings {
   geminiEnabled: boolean;
   groqEnabled: boolean;
   defaultProvider: 'GEMINI' | 'GROQ' | 'AUTO';
-  geminiDefaultModel: 'gemini-2.5-pro' | 'gemini-2.5-flash';
-  groqDefaultModel: 'openai/gpt-oss-120b' | 'openai/gpt-oss-20b' | 'qwen/qwen3.8-27b';
+  geminiDefaultModel: string;
+  groqDefaultModel: string;
   level1Provider: 'GROQ' | 'GEMINI';
   level2Provider: 'GROQ' | 'GEMINI';
   level3Provider: 'GEMINI' | 'GROQ';
@@ -13,13 +13,13 @@ export interface OrchestratorSettings {
   maxMemoryTokens: number;
 }
 
-const STORAGE_KEY = 'hub_orchestrator_settings_v1';
+const STORAGE_KEY = 'hub_orchestrator_settings_v2';
 
 export const DEFAULT_ORCHESTRATOR_SETTINGS: OrchestratorSettings = {
   geminiEnabled: true,
   groqEnabled: true,
   defaultProvider: 'AUTO',
-  geminiDefaultModel: 'gemini-2.5-pro',
+  geminiDefaultModel: 'gemini-3.8-flash',
   groqDefaultModel: 'openai/gpt-oss-120b',
   level1Provider: 'GROQ',
   level2Provider: 'GROQ',
@@ -40,7 +40,7 @@ export function getOrchestratorSettings(): OrchestratorSettings {
       }
     }
   } catch (e) {
-    // Silencioso em ambientes sem localStorage
+    // Silencioso em caso de restrição do navegador
   }
   return { ...DEFAULT_ORCHESTRATOR_SETTINGS };
 }

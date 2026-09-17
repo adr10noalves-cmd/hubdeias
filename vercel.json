@@ -5,16 +5,8 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api/groq/status",
-      "destination": "/api/groq/status"
-    },
-    {
-      "source": "/api/groq/discover",
-      "destination": "/api/groq/discover"
-    },
-    {
-      "source": "/api/groq/command",
-      "destination": "/api/groq/command"
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
     },
     {
       "source": "/(.*)",
