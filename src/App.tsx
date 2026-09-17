@@ -37,6 +37,8 @@ import { IdeaDetailModal } from './components/strategic/IdeaDetailModal';
 import { IdeaItem, StudyItem, EvolutionLog, ProjectHubItem } from './types';
 import { ProjectsManager } from './components/strategic/ProjectsManager';
 import { ProjectDetailView } from './components/strategic/ProjectDetailView';
+import { SystemMasterView } from './components/strategic/SystemMasterView';
+import { MasterTutorView } from './components/strategic/MasterTutorView';
 import { getProjects, saveSingleProject, deleteProject } from './services/projectsService';
 import {
   subscribeToIdeas,
@@ -492,6 +494,16 @@ export default function App() {
           studiesCount={studies.length}
           logsCount={evolutionLogs.length}
         />
+
+        {/* ========================================================================= */}
+        {/* VISÃO 0: O MESTRE DO SISTEMA (Centro de Comando Supremo) */}
+        {/* ========================================================================= */}
+        {currentHubView === 'master' && <SystemMasterView />}
+
+        {/* ========================================================================= */}
+        {/* VISÃO 0.5: RECEPTOR MESTRE (Agente de Ensino Avançado) */}
+        {/* ========================================================================= */}
+        {currentHubView === 'receptor' && <MasterTutorView />}
 
         {/* ========================================================================= */}
         {/* VISÃO 1: CATÁLOGO DE IAs (Totalmente preservado e original) */}

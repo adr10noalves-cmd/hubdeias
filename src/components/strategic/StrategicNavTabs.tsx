@@ -7,9 +7,11 @@ import {
   Activity,
   Search,
   Sparkles,
+  Crown,
+  Bot,
 } from 'lucide-react';
 
-export type MainHubView = 'catalog' | 'ideas' | 'projects' | 'studies' | 'diary' | 'dashboard';
+export type MainHubView = 'catalog' | 'ideas' | 'projects' | 'studies' | 'diary' | 'dashboard' | 'master' | 'receptor';
 
 interface StrategicNavTabsProps {
   currentView: MainHubView;
@@ -34,6 +36,34 @@ export const StrategicNavTabs: React.FC<StrategicNavTabsProps> = ({
     <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-2 bg-slate-900/90 backdrop-blur-xl border border-cyan-500/30 rounded-2xl mb-6 shadow-[0_10px_35px_rgba(0,0,0,0.5)]">
       {/* Abas Principais */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+        {/* Aba 0: O Mestre do Sistema */}
+        <button
+          type="button"
+          onClick={() => onChangeView('master')}
+          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+            currentView === 'master'
+              ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-[0_0_20px_rgba(99,102,241,0.5)]'
+              : 'text-indigo-300 hover:text-white hover:bg-slate-800 border border-indigo-500/30'
+          }`}
+        >
+          <Crown className="w-4 h-4 text-indigo-400" />
+          <span>O Mestre do Sistema</span>
+        </button>
+
+        {/* Aba 0.5: Receptor Mestre */}
+        <button
+          type="button"
+          onClick={() => onChangeView('receptor')}
+          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+            currentView === 'receptor'
+              ? 'bg-gradient-to-r from-cyan-600 to-indigo-600 text-white shadow-[0_0_20px_rgba(6,182,212,0.5)]'
+              : 'text-cyan-300 hover:text-white hover:bg-slate-800 border border-cyan-500/30'
+          }`}
+        >
+          <Bot className="w-4 h-4 text-cyan-400" />
+          <span>Receptor Mestre</span>
+        </button>
+
         {/* Aba 1: Catálogo de IAs */}
         <button
           type="button"
