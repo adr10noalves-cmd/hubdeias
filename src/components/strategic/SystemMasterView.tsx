@@ -54,7 +54,7 @@ export const SystemMasterView: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: 'GEMINI',
-          modelId: 'gemini-2.5-pro',
+          modelId: 'gemini-3.8-flash',
           systemPrompt: `Você é a Mestre Suprema de Engenharia de Software e Orquestração de Sistemas do Hub Estratégico. O usuário solicitou uma implantação, arquitetura ou comando: "${cmdText}".
 Analise detalhadamente e retorne um objeto JSON estrito contendo exatamente os seguintes campos:
 - "recommendedAI": string (qual IA usar, ex: "Gemini 2.5 Pro (Arquitetura) + Groq (Código)")

@@ -65,7 +65,7 @@ export const MasterTutorView: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: 'GEMINI',
-          modelId: 'gemini-2.5-pro',
+          modelId: 'gemini-3.8-flash',
           systemPrompt: `Você é o Receptor Mestre, o agente pedagógico mais avançado do Hub, potencializado pelo motor máximo da Gemini. O usuário está estudando no modo "${studyMode}". Forneça uma resposta rica, profunda, estruturada em Markdown, didática e completa, explicando conceitos fundamentais e práticos. Retorne um JSON estrito com o campo "response".`,
           userPrompt: userText,
           complexityLevel: 5,

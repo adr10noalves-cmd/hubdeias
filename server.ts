@@ -22,10 +22,10 @@ function getGemini(): GoogleGenAI {
   return geminiClient;
 }
 
-const GEMINI_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash'];
+const GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
 
 // Helper para chamadas resilientes ao Gemini com fallback de modelos
-async function callGeminiWithFallback(systemPrompt: string, userPrompt: string, requestedModel = 'gemini-2.5-pro') {
+async function callGeminiWithFallback(systemPrompt: string, userPrompt: string, requestedModel = 'gemini-3.8-flash') {
   const modelsToTry = [
     requestedModel,
     ...GEMINI_MODELS.filter((m) => m !== requestedModel),
@@ -85,7 +85,7 @@ app.get('/api/orchestrator/status', (req, res) => {
       configured: Boolean(process.env.GEMINI_API_KEY),
       role: 'PRINCIPAL (Raciocínio Profundo, Arquitetura, Planejamento e Código)',
       models: GEMINI_MODELS,
-      defaultModel: 'gemini-2.5-pro',
+      defaultModel: 'gemini-3.8-flash',
     },
     groq: {
       configured: Boolean(GROQ_API_KEY && GROQ_API_KEY.startsWith('gsk_')),

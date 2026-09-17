@@ -41,7 +41,7 @@ export const ProjectDebateChat: React.FC<ProjectDebateChatProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: 'GEMINI',
-          modelId: 'gemini-2.5-pro',
+          modelId: 'gemini-3.8-flash',
           systemPrompt: `Você é o Arquiteto e Consultor Técnico Especializado do projeto "${project.name}" (Objetivo: ${project.objective}). O projeto está na etapa "${project.currentStage}" com status "${project.status}" e ${project.progress}% de progresso. Responda em JSON estrito com o campo "response" contendo sua análise técnica profunda, conselhos arquiteturais e sugestões práticas em Markdown.`,
           userPrompt: userText,
           complexityLevel: 4,
