@@ -544,6 +544,48 @@ export interface ProjectHistoryItem {
   author?: string;
 }
 
+export interface ProjectMessage {
+  id: string;
+  projectId: string;
+  sender: 'user' | 'ai';
+  text: string;
+  createdAt: string;
+  aiModel?: string;
+}
+
+export interface ProjectDecision {
+  id: string;
+  projectId: string;
+  decision: string;
+  reason: string;
+  date: string;
+  responsible: string;
+  impact: string;
+  status: 'Ativa' | 'Revisada' | 'Revogada';
+}
+
+export interface ProjectMission {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string;
+  status: 'Pendente' | 'Em andamento' | 'Concluída' | 'Cancelada';
+  priority: 'Baixa' | 'Média' | 'Alta' | 'Urgente';
+  createdAt: string;
+  dueDate?: string;
+  notes?: string;
+}
+
+export interface ProjectSuggestion {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string;
+  category: string;
+  status: 'Nova' | 'Analisada' | 'Adicionada' | 'Ignorada';
+  createdAt: string;
+}
+
 export interface ProjectHubItem {
   id: string;
   name: string;

@@ -12,8 +12,37 @@ import {
   Target,
   FileText,
   Activity,
+  MessageSquare,
+  ShieldCheck,
+  Lightbulb,
 } from 'lucide-react';
-import { ProjectHubItem, ProjectHubStatus, PROJECT_HUB_STATUSES } from '../../types';
+import {
+  ProjectHubItem,
+  ProjectHubStatus,
+  PROJECT_HUB_STATUSES,
+  ProjectMessage,
+  ProjectDecision,
+  ProjectMission,
+  ProjectSuggestion,
+} from '../../types';
+import {
+  getProjectMessages,
+  saveProjectMessage,
+  getProjectDecisions,
+  saveProjectDecision,
+  deleteProjectDecision,
+  getProjectMissions,
+  saveProjectMission,
+  deleteProjectMission,
+  getProjectSuggestions,
+  saveProjectSuggestion,
+  deleteProjectSuggestion,
+} from '../../services/projectsService';
+import { ProjectDebateChat } from './ProjectDebateChat';
+import { ProjectDecisionsSection } from './ProjectDecisionsSection';
+import { ProjectMissionsSection } from './ProjectMissionsSection';
+import { ProjectSuggestionsSection } from './ProjectSuggestionsSection';
+import { ProjectNextActionWidget } from './ProjectNextActionWidget';
 
 interface ProjectDetailViewProps {
   project: ProjectHubItem;
@@ -36,6 +65,12 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
   const [progress, setProgress] = useState(project.progress);
   const [notes, setNotes] = useState(project.notes);
   const [newHistoryText, setNewHistoryText] = useState('');
+
+  // Workspace sub-states
+  const [messages, setMessages] = useState<ProjectMessage[]>(() => getProjectMessages(project.id));
+  const [decisions, setDecisions] = useState<ProjectDecision[]>(() => getProjectDecisions(project.id));
+  const [missions, setMissions] = useState<ProjectMission[]>(() => getProjectMissions(project.id));
+  const [suggestions, setSuggestions] = useState<ProjectSuggestion[]>(() => getProjectSuggestions(project.id));
 
   const getStatusBadgeColor = (st: ProjectHubStatus) => {
     switch (st) {
@@ -93,8 +128,135 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
     setNewHistoryText('');
   };
 
+  // Message Handlers
+  const handleSendMessage = (userText: string, aiResponseText: string) => {
+    const userMsg: ProjectMessage = {
+      id: `msg-${Date.now()}-u`,
+      projectId: project.id,
+      sender: 'user',
+      text: userText,
+      createdAt: new Date().toISOString(),
+    };
+    const aiMsg: ProjectMessage = {
+      id: `msg-${Date.now()}-ai`,
+      projectId: project.id,
+      sender: 'ai',
+      text: aiResponseText,
+      createdAt: new Date(Date.now() + 500).toISOString(),
+      aiModel: 'Gemini 2.5 Pro',
+    };
+
+    saveProjectMessage(userMsg);
+    const updatedMsgs = saveProjectMessage(aiMsg);
+    setMessages(updatedMsgs);
+
+    // Add history log
+    const updatedProject: ProjectHubItem = {
+      ...project,
+      history: [
+        {
+          id: `hist-${Date.now()}`,
+          date: new Date().toLocaleDateString(),
+          description: `Debate com IA realizado: "${userText.slice(0, 40)}..."`,
+          author: 'Hub IA',
+        },
+        ...project.history,
+      ],
+      updatedAt: new Date().toISOString(),
+    };
+    onUpdate(updatedProject);
+  };
+
+  // Decision Handlers
+  const handleSaveDecision = (decision: ProjectDecision) => {
+    const updated = saveProjectDecision(decision);
+    setDecisions(updated);
+
+    const updatedProject: ProjectHubItem = {
+      ...project,
+      history: [
+        {
+          id: `hist-${Date.now()}`,
+          date: new Date().toLocaleDateString(),
+          description: `Decisão registrada: "${decision.decision}"`,
+          author: 'Equipe',
+        },
+        ...project.history,
+      ],
+      updatedAt: new Date().toISOString(),
+    };
+    onUpdate(updatedProject);
+  };
+
+  const handleDeleteDecision = (id: string) => {
+    const updated = deleteProjectDecision(id, project.id);
+    setDecisions(updated);
+  };
+
+  // Mission Handlers
+  const handleSaveMission = (mission: ProjectMission) => {
+    const updated = saveProjectMission(mission);
+    setMissions(updated);
+
+    const updatedProject: ProjectHubItem = {
+      ...project,
+      history: [
+        {
+          id: `hist-${Date.now()}`,
+          date: new Date().toLocaleDateString(),
+          description: `Missão atualizada/criada: "${mission.title}" (${mission.status})`,
+          author: 'Equipe',
+        },
+        ...project.history,
+      ],
+      updatedAt: new Date().toISOString(),
+    };
+    onUpdate(updatedProject);
+  };
+
+  const handleDeleteMission = (id: string) => {
+    const updated = deleteProjectMission(id, project.id);
+    setMissions(updated);
+  };
+
+  // Suggestion Handlers
+  const handleSaveSuggestion = (suggestion: ProjectSuggestion) => {
+    const updated = saveProjectSuggestion(suggestion);
+    setSuggestions(updated);
+  };
+
+  const handleDeleteSuggestion = (id: string) => {
+    const updated = deleteProjectSuggestion(id, project.id);
+    setSuggestions(updated);
+  };
+
+  const handleConvertToMission = (suggestion: ProjectSuggestion) => {
+    const newMission: ProjectMission = {
+      id: `mission-${Date.now()}`,
+      projectId: project.id,
+      title: suggestion.title,
+      description: suggestion.description,
+      status: 'Pendente',
+      priority: 'Alta',
+      createdAt: new Date().toLocaleDateString(),
+      notes: `Convertido a partir da Sugestão da IA (${suggestion.category})`,
+    };
+    handleSaveMission(newMission);
+    handleSaveSuggestion({ ...suggestion, status: 'Adicionada' });
+  };
+
+  const handleUpdateNextAction = (newNextAction: string) => {
+    setNextAction(newNextAction);
+    const updated: ProjectHubItem = {
+      ...project,
+      nextAction: newNextAction,
+      updatedAt: new Date().toISOString(),
+    };
+    onUpdate(updated);
+  };
+
   return (
-    <div className="space-y-6 pb-12 animate-fadeIn">
+    <div className="space-y-6 pb-16 animate-fadeIn">
       {/* Top Bar Navigation & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/90 backdrop-blur-xl border border-cyan-500/30 rounded-2xl p-4 sm:p-5 shadow-xl">
         <div className="flex items-center gap-3">
@@ -139,9 +301,15 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
         </div>
       </div>
 
+      {/* PRÓXIMA AÇÃO WIDGET */}
+      <ProjectNextActionWidget
+        project={project}
+        onUpdateNextAction={handleUpdateNextAction}
+      />
+
       {/* Main Grid Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Cols: Details & Timeline */}
+        {/* Left 2 Cols: Details, Debate, Missions, Decisions, Suggestions */}
         <div className="lg:col-span-2 space-y-6">
           {/* Card Principal de Resumo */}
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-lg space-y-5">
@@ -248,69 +416,50 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
                   </div>
                 </div>
 
-                {/* Etapa e Próxima Ação */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                  <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1">
-                    <div className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Etapa Atual</div>
-                    <div className="text-white font-medium text-xs sm:text-sm">{project.currentStage}</div>
-                  </div>
-                  <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1">
-                    <div className="text-[11px] text-amber-400 font-semibold uppercase tracking-wider flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5" /> Próxima Ação
-                    </div>
-                    <div className="text-white font-medium text-xs sm:text-sm">{project.nextAction}</div>
-                  </div>
+                {/* Etapa Atual */}
+                <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1">
+                  <div className="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Etapa Atual</div>
+                  <div className="text-white font-medium text-xs sm:text-sm">{project.currentStage}</div>
                 </div>
               </>
             )}
           </div>
 
-          {/* Linha do Tempo / Histórico de Evolução */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-lg space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-white text-sm sm:text-base flex items-center gap-2">
-                <Layers className="w-4 h-4 text-cyan-400" /> Histórico de Evolução (Linha do Tempo)
-              </h3>
-              <span className="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded-md">
-                {project.history.length} registros
-              </span>
-            </div>
+          {/* DEBATE COM A IA */}
+          <ProjectDebateChat
+            project={project}
+            messages={messages}
+            onSendMessage={handleSendMessage}
+            onAddDecision={handleSaveDecision}
+          />
 
-            {/* Adicionar novo registro ao histórico */}
-            <form onSubmit={handleAddHistory} className="flex items-center gap-2 pt-2">
-              <input
-                type="text"
-                value={newHistoryText}
-                onChange={(e) => setNewHistoryText(e.target.value)}
-                placeholder="Adicionar nota ao histórico de evolução..."
-                className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-              />
-              <button
-                type="submit"
-                className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs flex items-center gap-1 shrink-0 transition-all shadow-md shadow-cyan-600/20"
-              >
-                <Plus className="w-4 h-4" /> Adicionar
-              </button>
-            </form>
+          {/* MISSÕES */}
+          <ProjectMissionsSection
+            projectId={project.id}
+            missions={missions}
+            onSaveMission={handleSaveMission}
+            onDeleteMission={handleDeleteMission}
+          />
 
-            <div className="space-y-3 pt-3">
-              {project.history.map((item, idx) => (
-                <div key={item.id || idx} className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80 flex items-start gap-3">
-                  <div className="w-2 h-2 rounded-full bg-cyan-400 mt-2 shrink-0 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-center justify-between text-[11px] text-slate-400">
-                      <span className="font-semibold text-cyan-300">{item.author || 'Hub IA'}</span>
-                      <span>{item.date}</span>
-                    </div>
-                    <p className="text-white text-xs sm:text-sm leading-relaxed">{item.description}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          {/* DECISÕES */}
+          <ProjectDecisionsSection
+            projectId={project.id}
+            decisions={decisions}
+            onSaveDecision={handleSaveDecision}
+            onDeleteDecision={handleDeleteDecision}
+          />
+
+          {/* IDEIAS DE EVOLUÇÃO */}
+          <ProjectSuggestionsSection
+            projectId={project.id}
+            suggestions={suggestions}
+            onSaveSuggestion={handleSaveSuggestion}
+            onDeleteSuggestion={handleDeleteSuggestion}
+            onConvertToMission={handleConvertToMission}
+          />
         </div>
 
-        {/* Right Col: IA Tools & Observations / Notes */}
+        {/* Right Col: Timeline History, IA Tools & Observations / Notes */}
         <div className="space-y-6">
           {/* IAs Utilizadas */}
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-3">
@@ -333,6 +482,49 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
             </div>
           </div>
 
+          {/* Linha do Tempo / Histórico de Evolução */}
+          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-white text-sm flex items-center gap-2">
+                <Layers className="w-4 h-4 text-cyan-400" /> Histórico (Linha do Tempo)
+              </h3>
+              <span className="text-xs text-slate-400 bg-slate-800 px-2 py-0.5 rounded-md">
+                {project.history.length}
+              </span>
+            </div>
+
+            <form onSubmit={handleAddHistory} className="flex items-center gap-2 pt-1">
+              <input
+                type="text"
+                value={newHistoryText}
+                onChange={(e) => setNewHistoryText(e.target.value)}
+                placeholder="Novo marco..."
+                className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+              />
+              <button
+                type="submit"
+                className="px-3 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs shrink-0 transition-all shadow-md"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
+            </form>
+
+            <div className="space-y-3 pt-2 max-h-[400px] overflow-y-auto scrollbar-thin">
+              {project.history.map((item, idx) => (
+                <div key={item.id || idx} className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 flex items-start gap-2.5">
+                  <div className="w-2 h-2 rounded-full bg-cyan-400 mt-1.5 shrink-0" />
+                  <div className="flex-1 space-y-0.5">
+                    <div className="flex items-center justify-between text-[10px] text-slate-400">
+                      <span className="font-semibold text-cyan-300">{item.author || 'Hub IA'}</span>
+                      <span>{item.date}</span>
+                    </div>
+                    <p className="text-white text-xs leading-relaxed">{item.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Observações / Área de Registro */}
           <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-3">
             <h3 className="font-bold text-white text-sm flex items-center gap-2">
@@ -352,7 +544,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
               </div>
             )}
             <p className="text-[11px] text-slate-500 italic">
-              Use esta área para salvar links, lembretes e diretrizes técnicas do projeto.
+              Use esta área para salvar links, lembretes e diretrizes técnicas.
             </p>
           </div>
         </div>
