@@ -49,12 +49,19 @@ export const ProjectDebateChat: React.FC<ProjectDebateChatProps> = ({
         }),
       });
 
-      const data = await res.json();
+      let data: any = null;
+      try {
+        const rawText = await res.text();
+        data = JSON.parse(rawText);
+      } catch {
+        data = { success: false, error: 'Resposta não pôde ser interpretada como JSON' };
+      }
+
       let aiReply = '';
       if (data.success && data.data) {
         aiReply = data.data.response || data.data.text || JSON.stringify(data.data);
       } else {
-        aiReply = `Erro na resposta da IA: ${data.error || 'Falha desconhecida'}. Verifique se a GEMINI_API_KEY está configurada no servidor.`;
+        aiReply = `Erro na resposta da IA: ${data.error || 'Falha temporária'}.`;
       }
 
       onSendMessage(userText, aiReply);

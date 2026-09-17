@@ -73,12 +73,33 @@ export const MasterTutorView: React.FC = () => {
         }),
       });
 
-      const data = await res.json();
       let tutorReply = '';
-      if (data.success && data.data) {
-        tutorReply = data.data.response || data.data.text || JSON.stringify(data.data);
-      } else {
-        tutorReply = `Erro na resposta do Receptor Mestre: ${data.error || 'Falha de conexão'}. Verifique se a GEMINI_API_KEY está configurada no ambiente.`;
+      try {
+        const rawText = await res.text();
+        let data: any = null;
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          data = { success: true, data: { response: rawText } };
+        }
+
+        if (data.success && data.data) {
+          if (typeof data.data === 'string') {
+            tutorReply = data.data;
+          } else if (data.data.response) {
+            tutorReply = data.data.response;
+          } else if (data.data.text) {
+            tutorReply = data.data.text;
+          } else if (data.data.message) {
+            tutorReply = data.data.message;
+          } else {
+            tutorReply = JSON.stringify(data.data, null, 2);
+          }
+        } else {
+          tutorReply = data.error || 'Não foi possível gerar a resposta no momento. Tente novamente.';
+        }
+      } catch (parseErr: any) {
+        tutorReply = `Erro no processamento da resposta: ${parseErr?.message || 'Falha ao decodificar'}`;
       }
 
       const tutorMsg: TutorMessage = {
@@ -98,7 +119,7 @@ export const MasterTutorView: React.FC = () => {
       const errorMsg: TutorMessage = {
         id: `msg-${Date.now()}-err`,
         sender: 'tutor',
-        text: `Erro de comunicação com o motor Gemini: ${err?.message || 'Erro desconhecido'}.`,
+        text: `Erro de comunicação com o motor de IA: ${err?.message || 'Erro desconhecido'}. Por favor, tente novamente em alguns instantes.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         mode: studyMode,
       };
@@ -128,12 +149,12 @@ export const MasterTutorView: React.FC = () => {
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-cyan-900 text-cyan-300 border border-cyan-700 uppercase tracking-widest">
-                  Agente de Ensino Avançado (Gemini 2.5 Pro)
+                  Agente de Ensino Avançado (Gemini & Groq Fallback)
                 </span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Receptor Mestre</h1>
               <p className="text-slate-400 text-xs sm:text-sm max-w-2xl leading-relaxed">
-                Seu tutor de inteligência artificial dedicado ao aprendizado profundo. Utiliza o motor real da Gemini para masterclasses, planos de estudo, quizzes e explicações passo a passo.
+                Seu tutor de inteligência artificial dedicado ao aprendizado profundo. Utiliza o motor real da Gemini com alta disponibilidade para masterclasses, planos de estudo, quizzes e explicações didáticas passo a passo.
               </p>
             </div>
           </div>
@@ -173,7 +194,7 @@ export const MasterTutorView: React.FC = () => {
         <div className="px-5 py-3.5 border-b border-slate-800 bg-slate-950/80 flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs text-slate-300">
             <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
-            <span>Modo Ativo: <strong className="text-cyan-300">{studyMode}</strong> (Motor Gemini 2.5 Pro)</span>
+            <span>Modo Ativo: <strong className="text-cyan-300">{studyMode}</strong> (Motor Gemini Inteligente)</span>
           </div>
           <div className="text-xs text-slate-400">
             {messages.length} mensagens na sessão
@@ -222,7 +243,7 @@ export const MasterTutorView: React.FC = () => {
                 <span className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce" />
                 <span className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce [animation-delay:0.2s]" />
                 <span className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce [animation-delay:0.4s]" />
-                <span className="ml-2 font-medium text-slate-300">Gemini 2.5 Pro estruturando explicação pedagógica...</span>
+                <span className="ml-2 font-medium text-slate-300">Receptor Mestre estruturando explicação pedagógica didática...</span>
               </div>
             </div>
           )}

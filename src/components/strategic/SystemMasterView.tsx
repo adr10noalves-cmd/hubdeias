@@ -66,8 +66,14 @@ Analise detalhadamente e retorne um objeto JSON estrito contendo exatamente os s
         }),
       });
 
-      const data = await res.json();
-      const parsed = data.success ? data.data : null;
+      let data: any = null;
+      try {
+        const rawText = await res.text();
+        data = JSON.parse(rawText);
+      } catch {
+        data = { success: false };
+      }
+      const parsed = data?.success ? data.data : null;
 
       const newCmd: MasterCommandLog = {
         id: `cmd-${Date.now()}`,

@@ -22,7 +22,7 @@ function getGemini(): GoogleGenAI {
   return geminiClient;
 }
 
-const GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+const GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-3.1-flash-lite', 'gemini-2.5-flash'];
 
 // Helper para chamadas resilientes ao Gemini com fallback de modelos e Groq
 async function callGeminiWithFallback(systemPrompt: string, userPrompt: string, requestedModel = 'gemini-3.8-flash') {
@@ -93,6 +93,8 @@ async function callGeminiWithFallback(systemPrompt: string, userPrompt: string, 
 const GROQ_API_KEY =
   process.env.GROQ_API_KEY || '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';
 
+const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768', 'gemma2-9b-it'];
+
 // Status do Orquestrador de IAs (Gemini Principal + Groq Auxiliar)
 app.get('/api/orchestrator/status', (req, res) => {
   res.json({
@@ -106,8 +108,8 @@ app.get('/api/orchestrator/status', (req, res) => {
     groq: {
       configured: Boolean(GROQ_API_KEY && GROQ_API_KEY.startsWith('gsk_')),
       role: 'AUXILIAR (Simulação, Alta Velocidade, Síntese e Níveis 1/2)',
-      models: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'],
-      defaultModel: 'openai/gpt-oss-120b',
+      models: GROQ_MODELS,
+      defaultModel: 'llama-3.3-70b-versatile',
     },
   });
 });
@@ -118,11 +120,9 @@ app.get('/api/groq/status', (req, res) => {
     status: 'ok',
     configured: Boolean(GROQ_API_KEY && GROQ_API_KEY.startsWith('gsk_')),
     engine: 'Groq Cloud Inference',
-    models: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'],
+    models: GROQ_MODELS,
   });
 });
-
-const GROQ_MODELS = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'];
 
 // Helper compartilhado para chamadas resilientes à Groq
 async function callGroqWithFallback(systemPrompt: string, userPrompt: string, maxTokens = 2048) {
