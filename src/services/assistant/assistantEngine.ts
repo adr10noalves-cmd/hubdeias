@@ -8,12 +8,15 @@ import {
   TaskPlan,
   OperationalExecutionRecord,
 } from '../../types';
-import { buildContextualMemory, saveExecutionRecord } from './memoryManager';
+import { saveExecutionRecord } from './memoryManager';
 import { analyzeUserIntent, IntentAnalysisResult } from './intentAnalyzer';
 import { buildStructuredTaskPlan } from './taskPlanner';
-import { routeAITask, RouterAnalysisResult } from './aiRouter';
+import { routeAITaskOrchestrated, ModelRouteDecision } from './aiRouter';
 import { executeScenarioSimulation, SimulationResult } from './simulationEngine';
 import { validateExecutionOutput, ValidationReport } from './validationManager';
+import { buildFilteredTaskContext, FilteredTaskContext } from './contextBuilder';
+import { buildDynamicPrompt } from './promptBuilder';
+import { TaskComplexityAnalysis } from './taskComplexity';
 
 export interface AssistantEngineInput {
   userMessage: string;
@@ -30,7 +33,25 @@ export interface AssistantEngineResponse {
   intent: AssistantIntent;
   intentDetails: IntentAnalysisResult;
   context: StructuredAssistantContext;
-  routing: RouterAnalysisResult;
+  routing: {
+    recommendedModel: {
+      modelId: string;
+      modelName: string;
+      provider: string;
+      costTier: string;
+      specialtyMatch: string;
+      reasoning: string;
+    };
+    alternativeModels: any[];
+    taskType: any;
+    complexity: 'BAIXA' | 'MÉDIA' | 'ALTA';
+    estimatedCost: 'GRATUITO' | 'BAIXO' | 'MÉDIO';
+    executionStrategy: string;
+  };
+  complexityAnalysis: TaskComplexityAnalysis;
+  providerUsed: 'GEMINI' | 'GROQ';
+  modelUsed: string;
+  fallbackTriggered: boolean;
   replyText: string;
   plan?: TaskPlan;
   simulationResult?: SimulationResult;
@@ -50,13 +71,22 @@ export interface AssistantEngineResponse {
     payload?: any;
   }>;
   executionRecordId?: string;
-  modelUsed: string;
   durationMs: number;
 }
 
 /**
- * 22. ARQUITETURA MODULAR: Assistant Engine
- * Núcleo unificado de orquestração do HUB de IAs.
+ * 6. CICLO OPERACIONAL DO ASSISTENTE (11 PASSOS)
+ * 1. Entender a intenção do usuário
+ * 2. Identificar a complexidade da tarefa
+ * 3. Recuperar da memória persistente apenas o contexto relevante
+ * 4. Identificar o projeto relacionado, quando existir
+ * 5. Selecionar o modelo mais adequado (Gemini Principal / Groq Auxiliar)
+ * 6. Montar o contexto/prompt apropriado (Prompt Builder Dinâmico)
+ * 7. Executar a tarefa com fallback transparente (/api/orchestrate)
+ * 8. Analisar o resultado
+ * 9. Validar se o resultado atende ao objetivo
+ * 10. Registrar o resultado e a evolução na memória existente
+ * 11. Continuar o fluxo quando houver uma próxima ação necessária
  */
 export async function processAssistantMessage(
   input: AssistantEngineInput
@@ -64,34 +94,56 @@ export async function processAssistantMessage(
   const startTime = Date.now();
   const { userMessage, activeMode, targetProjectId, allIdeas, allStudies, catalog, history = [] } = input;
 
-  // 1. IDENTIFICA INTENÇÃO & PROJETOS MENCIONADOS
+  // PASSO 1: ENTENDER A INTENÇÃO DO USUÁRIO
   const intentResult = analyzeUserIntent(userMessage, allIdeas);
   const effectiveProjectId = targetProjectId || intentResult.mentionedProjectId;
 
-  // 2. RECUPERAÇÃO CONTEXTUAL DA MEMÓRIA PERSISTENTE
-  const context = await buildContextualMemory({
+  // PASSO 3 & 4: RECUPERAR DA MEMÓRIA PERSISTENTE APENAS O CONTEXTO RELEVANTE (CONTEXT BUILDER CIRÚRGICO)
+  const filteredContext: FilteredTaskContext = await buildFilteredTaskContext({
     userQuery: userMessage,
     targetProjectId: effectiveProjectId,
     allIdeas,
     allStudies,
   });
 
-  // 3. ROTEAMENTO INTELIGENTE DE IA
-  const isSim = activeMode === 'SIMULATION' || intentResult.isAskingForSimulation;
-  const routing = routeAITask({
-    taskText: userMessage,
-    isSimulation: isSim,
+  const structuredContext: StructuredAssistantContext = {
+    projectId: filteredContext.targetProject?.id,
+    projectTitle: filteredContext.targetProject?.title,
+    currentVersion: filteredContext.latestVersion,
+    currentStage: filteredContext.targetProject?.stage,
+    projectDescription: filteredContext.targetProject?.description,
+    objective: filteredContext.objective,
+    lastEvolution: filteredContext.recentChangesSummary[0],
+    currentProblems: filteredContext.knownProblems,
+    nextSteps: filteredContext.nextSteps,
+    relatedStudiesThemes: filteredContext.relevantStudies.map((s) => s.theme),
+    summaryForAI: filteredContext.contextSummaryText,
+  };
+
+  // PASSO 2 & 5: SELEÇÃO INTELIGENTE DE MODELO (MODEL ROUTER)
+  const isSimulation = activeMode === 'SIMULATION' || intentResult.isAskingForSimulation;
+  const routeDecision: ModelRouteDecision = routeAITaskOrchestrated({
+    userTask: userMessage,
+    context: filteredContext,
+    isSimulation,
     catalogIAs: catalog,
   });
 
-  // 4. FLUXO POR MODO
+  const legacyRouting = {
+    recommendedModel: routeDecision.recommendedModel,
+    alternativeModels: routeDecision.alternativeModels,
+    taskType: routeDecision.complexity.level >= 3 ? ('CÓDIGO' as const) : ('GERAL' as const),
+    complexity: routeDecision.complexity.level >= 3 ? ('ALTA' as const) : routeDecision.complexity.level === 2 ? ('MÉDIA' as const) : ('BAIXA' as const),
+    estimatedCost: 'GRATUITO' as const,
+    executionStrategy: routeDecision.executionStrategy,
+  };
 
-  // MODO A: SIMULAÇÃO
-  if (isSim) {
+  // FLUXO ESPECÍFICO 1: SIMULAÇÃO ISOLADA EM SANDBOX GROQ
+  if (isSimulation) {
     const simResult = await executeScenarioSimulation({
       objective: userMessage,
-      context,
-      modelId: routing.recommendedModel.modelId,
+      context: structuredContext,
+      modelId: routeDecision.modelId,
     });
 
     const durationMs = Date.now() - startTime;
@@ -99,57 +151,63 @@ export async function processAssistantMessage(
       mode: 'SIMULATION',
       intent: intentResult.intent,
       intentDetails: intentResult,
-      context,
-      routing,
-      replyText: `### 🧪 SIMULAÇÃO DE CENÁRIO (AMBIENTE GROQ)\n\n*Aviso: Este é um resultado de simulação virtual, não uma execução em produção.*\n\n${simResult.simulatedOutput}\n\n**Pontos Fortes Identificados:**\n${simResult.simulatedStrengths.map((s) => `- ${s}`).join('\n')}\n\n**Riscos & Cuidados:**\n${simResult.simulatedRisks.map((r) => `- ${r}`).join('\n')}`,
+      context: structuredContext,
+      routing: legacyRouting,
+      complexityAnalysis: routeDecision.complexity,
+      providerUsed: 'GROQ',
+      modelUsed: simResult.modelUsed,
+      fallbackTriggered: false,
+      replyText: `### 🧪 SIMULAÇÃO DE CENÁRIO (SANDBOX GROQ)\n\n*⚠️ Aviso Importante: Este é um resultado de simulação virtual preditiva, não uma execução em produção.*\n\n${simResult.simulatedOutput}\n\n**Pontos Fortes Identificados:**\n${simResult.simulatedStrengths.map((s) => `- ${s}`).join('\n')}\n\n**Riscos & Gargalos Analisados:**\n${simResult.simulatedRisks.map((r) => `- ${r}`).join('\n')}`,
       simulationResult: simResult,
       validationReport: {
         status: 'resposta_validada',
         passed: true,
         score: 100,
-        criteriaEvaluated: [{ name: 'Simulação Virtual em Sandbox', passed: true, details: 'Cenário processado e salvo como simulação.' }],
-        summary: 'Simulação completada com êxito no ambiente Groq.',
-        recommendations: ['Executar em ambiente real quando o planejamento estiver aprovado.'],
+        criteriaEvaluated: [{ name: 'Simulação Virtual em Sandbox', passed: true, details: 'Cenário simulado sem alterar o projeto definitivo.' }],
+        summary: 'Simulação virtual concluída no motor de alta velocidade Groq.',
+        recommendations: ['Avaliar os riscos antes de aplicar no projeto real.'],
       },
       suggestedActions: [
-        { label: '📋 Transformar em Plano de Etapas', actionType: 'SWITCH_TO_PLANNING' },
-        { label: '💾 Registrar Próximo Passo no Projeto', actionType: 'SAVE_NEXT_STEP', target: effectiveProjectId },
+        { label: '📋 Transformar em Plano Estruturado', actionType: 'SWITCH_TO_PLANNING' },
+        ...(effectiveProjectId ? [{ label: '💾 Registrar Aprendizado no Diário', actionType: 'OPEN_LEARNING_MODAL', target: effectiveProjectId }] : []),
       ],
-      modelUsed: simResult.modelUsed,
       durationMs,
     };
   }
 
-  // MODO B: PLANEJAMENTO
+  // FLUXO ESPECÍFICO 2: PLANEJAMENTO ESTRUTURADO (GEMINI PRINCIPAL)
   if (activeMode === 'PLANNING' || intentResult.isAskingForPlanning) {
     const plan = buildStructuredTaskPlan({
       objective: userMessage,
-      projectName: context.projectTitle,
-      contextSummary: context.summaryForAI,
+      projectName: structuredContext.projectTitle,
+      contextSummary: structuredContext.summaryForAI,
     });
 
-    const replyText = `### 📋 Plano Operacional Estruturado\n\n**Objetivo:** ${plan.objective}\n${context.projectTitle ? `*Vinculado ao Projeto: ${context.projectTitle}*\n` : ''}\n${plan.steps.map((stg) => `**Etapa ${stg.stepNumber}: ${stg.title}**\n- Entregável: ${stg.deliverable}\n- IA Recomendada: \`${stg.toolRecommendation}\`\n- Teste de Validação: ${stg.testsValidation}`).join('\n\n')}\n\n**Critérios de Testes:** ${plan.testingCriteria}\n**Diretriz de Produção:** ${plan.productionNotes}\n**Próxima Evolução:** ${plan.nextEvolution}`;
+    const replyText = `### 📋 Plano Operacional Estruturado\n\n**Objetivo:** ${plan.objective}\n${structuredContext.projectTitle ? `*Vinculado ao Projeto: ${structuredContext.projectTitle}*\n` : ''}\n${plan.steps.map((stg) => `**Etapa ${stg.stepNumber}: ${stg.title}**\n- Entregável: ${stg.deliverable}\n- IA Recomendada: \`${stg.toolRecommendation}\`\n- Validação: ${stg.testsValidation}`).join('\n\n')}\n\n**Critérios de Teste:** ${plan.testingCriteria}\n**Notas Técnicas:** ${plan.productionNotes}\n**Próxima Evolução:** ${plan.nextEvolution}`;
 
     const durationMs = Date.now() - startTime;
     return {
       mode: 'PLANNING',
       intent: 'pedido_planejamento',
       intentDetails: intentResult,
-      context,
-      routing,
+      context: structuredContext,
+      routing: legacyRouting,
+      complexityAnalysis: routeDecision.complexity,
+      providerUsed: 'GEMINI',
+      modelUsed: 'gemini-2.5-pro',
+      fallbackTriggered: false,
       replyText,
       plan,
       suggestedActions: [
         { label: '🧪 Simular Cenário com Groq', actionType: 'SIMULATE_CURRENT_PLAN' },
         { label: '✨ Copiar Prompt da Etapa 1', actionType: 'COPY_PROMPT_STEP_1', payload: plan.steps[0]?.prompt },
-        ...(context.projectId ? [{ label: `💾 Adotar no Projeto "${context.projectTitle}"`, actionType: 'APPLY_PLAN_TO_PROJECT', target: context.projectId, payload: plan }] : []),
+        ...(structuredContext.projectId ? [{ label: `💾 Adotar no Projeto "${structuredContext.projectTitle}"`, actionType: 'APPLY_PLAN_TO_PROJECT', target: structuredContext.projectId, payload: plan }] : []),
       ],
-      modelUsed: routing.recommendedModel.modelName,
       durationMs,
     };
   }
 
-  // MODO C: DETECÇÃO DE NOVA IDEIA (Confirmação obrigatória do usuário)
+  // FLUXO ESPECÍFICO 3: DETECÇÃO DE NOVA IDEIA (Com confirmação explícita do usuário)
   if (intentResult.detectedNewIdea && !effectiveProjectId) {
     const candidate = intentResult.detectedNewIdea;
     const replyText = `Percebi que você compartilhou uma nova ideia promissora:\n\n**Título Sugerido:** ${candidate.suggestedTitle}\n**Categoria:** ${candidate.category}\n**Descrição:** "${candidate.description}"\n\n**Quer que eu registre essa ideia no HUB?**\nAssim podemos acompanhar sua evolução desde o estágio inicial, criar planos de ação e relacionar com estudos.`;
@@ -159,8 +217,12 @@ export async function processAssistantMessage(
       mode: 'CONVERSATION',
       intent: 'ideia',
       intentDetails: intentResult,
-      context,
-      routing,
+      context: structuredContext,
+      routing: legacyRouting,
+      complexityAnalysis: routeDecision.complexity,
+      providerUsed: 'GEMINI',
+      modelUsed: 'gemini-2.5-flash',
+      fallbackTriggered: false,
       replyText,
       pendingConfirmation: {
         type: 'REGISTER_NEW_IDEA',
@@ -177,74 +239,91 @@ export async function processAssistantMessage(
         { label: '✅ Sim, Registrar no HUB', actionType: 'CONFIRM_REGISTER_IDEA', payload: candidate },
         { label: '✏️ Ajustar antes de salvar', actionType: 'EDIT_IDEA_BEFORE_SAVING', payload: candidate },
       ],
-      modelUsed: routing.recommendedModel.modelName,
       durationMs,
     };
   }
 
-  // MODO D: CONVERSAÇÃO / EVOLUÇÃO / EXECUÇÃO COM MEMÓRIA PERSISTENTE
-  // Consulta o backend com o contexto inteligente injetado
+  // PASSO 6: MONTAR O CONTEXTO/PROMPT APROPRIADO (PROMPT BUILDER DINÂMICO)
+  const builtPrompt = buildDynamicPrompt({
+    userTask: userMessage,
+    context: filteredContext,
+    complexity: routeDecision.complexity,
+    activeMode,
+    provider: routeDecision.provider,
+    modelId: routeDecision.modelId,
+    catalog,
+    history,
+  });
+
+  // PASSO 7: EXECUTAR A TAREFA VIA /api/orchestrate (COM FALLBACK TRANSPARENTE)
   let replyText = '';
-  let modelUsed = routing.recommendedModel.modelName;
+  let providerUsed: 'GEMINI' | 'GROQ' = routeDecision.provider;
+  let modelUsed: string = routeDecision.modelName;
+  let fallbackTriggered = false;
 
   try {
-    const resp = await fetch('/api/groq/command', {
+    const response = await fetch('/api/orchestrate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        action: 'central_chat',
-        payload: {
-          message: userMessage,
-          history,
-          catalog,
-          contextSummary: context.summaryForAI,
-          activeMode,
-          intent: intentResult.intent,
-        },
+        provider: routeDecision.provider,
+        modelId: routeDecision.modelId,
+        systemPrompt: builtPrompt.systemPrompt,
+        userPrompt: builtPrompt.userPrompt,
+        complexityLevel: routeDecision.complexity.level,
+        activeMode,
+        allowFallback: true,
       }),
     });
 
-    if (resp.ok) {
-      const data = await resp.json();
-      replyText = data.response || data.content || '';
-      if (data.modelUsed) modelUsed = data.modelUsed;
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success && data.data) {
+        replyText = data.data.response || data.data.content || JSON.stringify(data.data);
+        providerUsed = data.providerUsed || routeDecision.provider;
+        modelUsed = data.modelUsed || routeDecision.modelId;
+        fallbackTriggered = Boolean(data.fallbackTriggered);
+      } else {
+        throw new Error(data.error || 'Resposta sem dados do orquestrador');
+      }
     } else {
-      throw new Error(`Erro ${resp.status}`);
+      throw new Error(`Servidor retornou status ${response.status}`);
     }
-  } catch (err) {
-    console.warn('[AssistantEngine] Chamada à API oscilou, gerando resposta com memória local:', err);
-    if (context.projectId) {
-      replyText = `Com base na memória do seu projeto **"${context.projectTitle}"** (${context.currentVersion}, estágio ${context.currentStage}):\n\n- **Objetivo Central:** ${context.objective || context.projectDescription}\n- **Última Evolução:** ${context.lastEvolution}\n- **Próximos Passos Sugeridos:** ${context.nextSteps.join('; ') || 'Definir próximas metas'}\n\nPara avançar, recomendo focarmos em: "${context.currentProblems[0] || 'Refinamento do escopo'}". O que gostaria de executar agora?`;
+  } catch (err: any) {
+    console.warn('[AssistantEngine] Chamada à API de orquestração oscilou, acionando fallback local com memória persistente:', err?.message || err);
+    fallbackTriggered = true;
+    if (structuredContext.projectId) {
+      replyText = `Com base na memória do seu projeto **"${structuredContext.projectTitle}"** (${structuredContext.currentVersion}, estágio ${structuredContext.currentStage}):\n\n- **Objetivo Central:** ${structuredContext.objective || structuredContext.projectDescription}\n- **Última Evolução:** ${structuredContext.lastEvolution || 'Registro inicial'}\n- **Próximos Passos Registrados:** ${structuredContext.nextSteps.join('; ') || 'Definir próximas metas'}\n\nPara avançar na evolução do sistema, recomendo focarmos em: "${structuredContext.currentProblems[0] || 'Refinamento do escopo'}". Como deseja proceder?`;
     } else {
-      replyText = `Entendido! Estou operando como Núcleo de Orquestração do Hub.\n\nPosso ajudar a estruturar ideias, planejar etapas de desenvolvimento, simular cenários com modelos Groq ou acompanhar seus estudos. Como prefere começar?`;
+      replyText = `Entendido! Estou operando como Núcleo de Orquestração Inteligente do Hub.\n\nPosso ajudar a estruturar ideias, planejar etapas, simular hipóteses ou orientar seus estudos técnicos com modelos de alta precisão. O que gostaria de executar?`;
     }
   }
 
-  // Validação da Execução
+  // PASSO 8 & 9: ANALISAR E VALIDAR SE O RESULTADO ATENDE AO OBJETIVO
   const validationReport = validateExecutionOutput({
     rawOutput: replyText,
-    expectedDeliverable: 'Resposta contextualizada e acionável',
+    expectedDeliverable: 'Resposta contextualizada, rigorosa e acionável',
   });
 
-  // Registro Operacional Automático
+  // PASSO 10: REGISTRAR O RESULTADO E A EVOLUÇÃO NA MEMÓRIA EXISTENTE
   const durationMs = Date.now() - startTime;
   const executionRecordId = `exec-${Date.now()}`;
   const record: OperationalExecutionRecord = {
     id: executionRecordId,
-    projectId: context.projectId,
-    projectTitle: context.projectTitle,
+    projectId: structuredContext.projectId,
+    projectTitle: structuredContext.projectTitle,
     mode: activeMode,
     isSimulation: false,
     taskTitle: userMessage.slice(0, 70),
     intent: intentResult.intent,
-    modelUsed,
+    modelUsed: `${providerUsed}: ${modelUsed}`,
     prompt: userMessage,
     result: replyText,
     status: validationReport.status,
-    validationNotes: validationReport.summary,
-    nextStep: context.nextSteps[0],
+    validationNotes: `Nível ${routeDecision.complexity.level} (${routeDecision.complexity.levelName}). Fallback: ${fallbackTriggered ? 'Sim' : 'Não'}. Validação: ${validationReport.summary}`,
+    nextStep: structuredContext.nextSteps[0],
     durationMs,
-    estimatedTimeSavedMin: 10,
+    estimatedTimeSavedMin: routeDecision.complexity.level >= 3 ? 25 : 10,
     costUsd: 0,
     createdAt: new Date().toISOString(),
   };
@@ -252,26 +331,26 @@ export async function processAssistantMessage(
   try {
     await saveExecutionRecord(record);
   } catch (e) {
-    console.warn('[AssistantEngine] Não foi possível persistir execução no banco:', e);
+    console.warn('[AssistantEngine] Não foi possível persistir execução no Firestore:', e);
   }
 
-  // Sugestões de ações contextuais
+  // PASSO 11: CONTINUAR O FLUXO COM PRÓXIMAS AÇÕES SUGERIDAS (MANTENDO O USUÁRIO NO CONTROLE)
   const suggestedActions: AssistantEngineResponse['suggestedActions'] = [];
 
-  if (context.projectId) {
+  if (structuredContext.projectId) {
     suggestedActions.push({
-      label: `💡 Ver Projeto "${context.projectTitle}"`,
+      label: `💡 Ver Projeto "${structuredContext.projectTitle}"`,
       actionType: 'OPEN_PROJECT_DETAIL',
-      target: context.projectId,
+      target: structuredContext.projectId,
     });
     suggestedActions.push({
       label: '🧪 Simular Próximo Passo',
       actionType: 'SWITCH_TO_SIMULATION',
     });
     suggestedActions.push({
-      label: '📝 Registrar Aprendizado',
+      label: '📝 Registrar Aprendizado no Diário',
       actionType: 'OPEN_LEARNING_MODAL',
-      target: context.projectId,
+      target: structuredContext.projectId,
     });
   } else {
     suggestedActions.push({
@@ -292,13 +371,16 @@ export async function processAssistantMessage(
     mode: activeMode,
     intent: intentResult.intent,
     intentDetails: intentResult,
-    context,
-    routing,
+    context: structuredContext,
+    routing: legacyRouting,
+    complexityAnalysis: routeDecision.complexity,
+    providerUsed,
+    modelUsed,
+    fallbackTriggered,
     replyText,
     validationReport,
     suggestedActions,
     executionRecordId,
-    modelUsed,
     durationMs,
   };
 }

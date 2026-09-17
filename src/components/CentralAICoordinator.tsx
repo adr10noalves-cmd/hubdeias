@@ -16,7 +16,9 @@ import {
   Check,
   CheckCircle2,
   AlertTriangle,
-  ChevronDown
+  ChevronDown,
+  Sliders,
+  Zap
 } from 'lucide-react';
 import { 
   IAItem, 
@@ -32,6 +34,7 @@ import {
 } from '../services/assistant/assistantEngine';
 import { AssistantMemoryModal } from './strategic/AssistantMemoryModal';
 import { ProjectLearningModal } from './strategic/ProjectLearningModal';
+import { OrchestratorSettingsModal } from './strategic/OrchestratorSettingsModal';
 
 interface CentralAICoordinatorProps {
   catalog: IAItem[];
@@ -56,6 +59,11 @@ interface Message {
   isSimulation?: boolean;
   intentDetected?: string;
   modelUsed?: string;
+  providerUsed?: 'GEMINI' | 'GROQ';
+  complexityLevel?: number;
+  complexityLevelName?: string;
+  fallbackTriggered?: boolean;
+  durationMs?: number;
   plan?: TaskPlan;
   validationReport?: any;
   pendingConfirmation?: {
@@ -94,6 +102,7 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
   // Modais de suporte
   const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
   const [isLearningModalOpen, setIsLearningModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [activeLearningIdea, setActiveLearningIdea] = useState<IdeaItem | null>(null);
 
   const [messages, setMessages] = useState<Message[]>([
@@ -169,6 +178,11 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
         mode: engineResponse.mode,
         isSimulation: engineResponse.mode === 'SIMULATION',
         modelUsed: engineResponse.modelUsed,
+        providerUsed: engineResponse.providerUsed,
+        complexityLevel: engineResponse.complexityAnalysis?.level,
+        complexityLevelName: engineResponse.complexityAnalysis?.levelName,
+        fallbackTriggered: engineResponse.fallbackTriggered,
+        durationMs: engineResponse.durationMs,
         plan: engineResponse.plan,
         validationReport: engineResponse.validationReport,
         pendingConfirmation: engineResponse.pendingConfirmation,
@@ -363,6 +377,15 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
                   <span className="hidden sm:inline">Memória</span>
                 </button>
 
+                {/* Botão de Governança e Configurações */}
+                <button
+                  onClick={() => setIsSettingsModalOpen(true)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                  title="Configurações do Orquestrador"
+                >
+                  <Sliders className="w-3.5 h-3.5" />
+                </button>
+
                 <button
                   onClick={() => setMessages([messages[0]])}
                   className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
@@ -553,9 +576,33 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
                     )}
                   </div>
 
-                  <div className="text-[10px] text-slate-500 mt-1 px-1 flex items-center gap-2">
-                    <span>{m.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    {m.modelUsed && <span>• {m.modelUsed}</span>}
+                  <div className="text-[10px] text-slate-400 mt-1.5 px-1 flex flex-wrap items-center gap-2">
+                    <span className="text-slate-500">{m.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    {m.providerUsed && (
+                      <span className={`inline-flex items-center gap-1 font-semibold px-1.5 py-0.5 rounded text-[9.5px] ${
+                        m.providerUsed === 'GEMINI'
+                          ? 'bg-cyan-950/60 text-cyan-300 border border-cyan-800/60'
+                          : 'bg-amber-950/60 text-amber-300 border border-amber-800/60'
+                      }`}>
+                        {m.providerUsed === 'GEMINI' ? <Sparkles className="w-3 h-3 text-cyan-400" /> : <Zap className="w-3 h-3 text-amber-400" />}
+                        {m.providerUsed === 'GEMINI' ? 'Gemini' : 'Groq'} • {m.modelUsed}
+                      </span>
+                    )}
+                    {m.complexityLevel && (
+                      <span className="text-slate-500 bg-slate-800/60 px-1.5 py-0.5 rounded text-[9px] border border-slate-700/50">
+                        Nível {m.complexityLevel}: {m.complexityLevelName}
+                      </span>
+                    )}
+                    {m.fallbackTriggered && (
+                      <span className="text-amber-300 bg-amber-950/60 border border-amber-800/50 px-1 py-0.5 rounded text-[9px]">
+                        Fallback Ativo
+                      </span>
+                    )}
+                    {m.durationMs && (
+                      <span className="text-slate-500 text-[9px]">
+                        {(m.durationMs / 1000).toFixed(1)}s
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -675,6 +722,12 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
           }}
         />
       )}
+
+      {/* MODAL DE CONFIGURAÇÃO DO ORQUESTRADOR (GEMINI + GROQ) */}
+      <OrchestratorSettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+      />
     </>
   );
 };

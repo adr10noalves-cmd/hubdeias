@@ -2,17 +2,101 @@ import express from 'express';
 import path from 'path';
 import 'dotenv/config';
 import { createServer as createViteServer } from 'vite';
+import { GoogleGenAI } from '@google/genai';
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json({ limit: '2mb' }));
 
+// Inicialização Lazy e Segura do Gemini (Google GenAI)
+let geminiClient: GoogleGenAI | null = null;
+function getGemini(): GoogleGenAI {
+  if (!geminiClient) {
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) {
+      throw new Error('GEMINI_API_KEY não configurada no ambiente do servidor.');
+    }
+    geminiClient = new GoogleGenAI({ apiKey: key });
+  }
+  return geminiClient;
+}
+
+const GEMINI_MODELS = ['gemini-2.5-pro', 'gemini-2.5-flash'];
+
+// Helper para chamadas resilientes ao Gemini com fallback de modelos
+async function callGeminiWithFallback(systemPrompt: string, userPrompt: string, requestedModel = 'gemini-2.5-pro') {
+  const modelsToTry = [
+    requestedModel,
+    ...GEMINI_MODELS.filter((m) => m !== requestedModel),
+  ];
+
+  const ai = getGemini();
+  let lastError: any = null;
+
+  for (const model of modelsToTry) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: [
+          { role: 'user', parts: [{ text: userPrompt }] }
+        ],
+        config: {
+          systemInstruction: systemPrompt,
+          responseMimeType: 'application/json',
+          temperature: 0.25,
+        }
+      });
+
+      const text = response.text || '';
+      if (!text) throw new Error(`Resposta vazia do modelo Gemini ${model}`);
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        const match = text.match(/\{[\s\S]*\}/);
+        if (match) {
+          parsed = JSON.parse(match[0]);
+        } else {
+          parsed = { response: text };
+        }
+      }
+
+      return { parsed, modelUsed: model };
+    } catch (err: any) {
+      console.warn(`[Gemini Model ${model}] falha na chamada:`, err?.message || err);
+      lastError = err;
+    }
+  }
+
+  throw new Error(`Todos os modelos Gemini falharam: ${lastError?.message || 'Erro desconhecido'}`);
+}
+
 // Chave da Groq obtida das variáveis de ambiente (com fallback para a chave fornecida)
 const GROQ_API_KEY =
   process.env.GROQ_API_KEY || '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';
 
-// Status da integração Groq
+// Status do Orquestrador de IAs (Gemini Principal + Groq Auxiliar)
+app.get('/api/orchestrator/status', (req, res) => {
+  res.json({
+    status: 'ok',
+    gemini: {
+      configured: Boolean(process.env.GEMINI_API_KEY),
+      role: 'PRINCIPAL (Raciocínio Profundo, Arquitetura, Planejamento e Código)',
+      models: GEMINI_MODELS,
+      defaultModel: 'gemini-2.5-pro',
+    },
+    groq: {
+      configured: Boolean(GROQ_API_KEY && GROQ_API_KEY.startsWith('gsk_')),
+      role: 'AUXILIAR (Simulação, Alta Velocidade, Síntese e Níveis 1/2)',
+      models: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b'],
+      defaultModel: 'openai/gpt-oss-120b',
+    },
+  });
+});
+
+// Status da integração Groq (mantido para retrocompatibilidade)
 app.get('/api/groq/status', (req, res) => {
   res.json({
     status: 'ok',
@@ -83,6 +167,110 @@ async function callGroqWithFallback(systemPrompt: string, userPrompt: string, ma
 
   return { parsed, modelUsed };
 }
+
+// 7. MOTOR CENTRAL DE ORQUESTRAÇÃO DE IA (GEMINI PRINCIPAL + GROQ AUXILIAR)
+app.post('/api/orchestrate', async (req, res) => {
+  const startTime = Date.now();
+  const {
+    provider = 'GEMINI',
+    modelId,
+    systemPrompt,
+    userPrompt,
+    complexityLevel = 3,
+    activeMode = 'CONVERSATION',
+    allowFallback = true,
+  } = req.body || {};
+
+  if (!userPrompt) {
+    res.status(400).json({ error: 'Parâmetro "userPrompt" é obrigatório para orquestração.' });
+    return;
+  }
+
+  const sysPrompt = systemPrompt || 'Você é o Núcleo Inteligente de Orquestração do Hub de IAs. Responda em JSON estrito com o campo "response".';
+  let primaryError: string | null = null;
+  let fallbackTriggered = false;
+  let executedProvider = provider;
+  let executedModel = modelId;
+  let parsedResult: any = null;
+
+  // Tentativa no Provedor Primário Selecionado
+  if (provider === 'GEMINI') {
+    try {
+      const result = await callGeminiWithFallback(sysPrompt, userPrompt, modelId || 'gemini-2.5-pro');
+      parsedResult = result.parsed;
+      executedModel = result.modelUsed;
+    } catch (err: any) {
+      primaryError = err?.message || 'Falha na execução do Gemini';
+      console.warn('[Orchestrator] Falha no provedor primário Gemini:', primaryError);
+
+      if (allowFallback) {
+        try {
+          console.log('[Orchestrator] Acionando fallback automático para Groq...');
+          const groqResult = await callGroqWithFallback(sysPrompt, userPrompt, 2048);
+          parsedResult = groqResult.parsed;
+          executedProvider = 'GROQ';
+          executedModel = groqResult.modelUsed;
+          fallbackTriggered = true;
+        } catch (groqErr: any) {
+          console.error('[Orchestrator] Fallback Groq também falhou:', groqErr);
+          res.status(502).json({
+            success: false,
+            error: `Ambos os provedores falharam. Gemini: ${primaryError}. Groq: ${groqErr?.message || 'Erro desconhecido'}.`,
+          });
+          return;
+        }
+      } else {
+        res.status(502).json({ success: false, error: primaryError });
+        return;
+      }
+    }
+  } else {
+    // Provedor Primário: GROQ
+    try {
+      const result = await callGroqWithFallback(sysPrompt, userPrompt, 2048);
+      parsedResult = result.parsed;
+      executedModel = result.modelUsed;
+    } catch (err: any) {
+      primaryError = err?.message || 'Falha na execução da Groq';
+      console.warn('[Orchestrator] Falha no provedor auxiliar Groq:', primaryError);
+
+      if (allowFallback) {
+        try {
+          console.log('[Orchestrator] Acionando fallback automático para Gemini...');
+          const geminiResult = await callGeminiWithFallback(sysPrompt, userPrompt, 'gemini-2.5-flash');
+          parsedResult = geminiResult.parsed;
+          executedProvider = 'GEMINI';
+          executedModel = geminiResult.modelUsed;
+          fallbackTriggered = true;
+        } catch (geminiErr: any) {
+          console.error('[Orchestrator] Fallback Gemini também falhou:', geminiErr);
+          res.status(502).json({
+            success: false,
+            error: `Ambos os provedores falharam. Groq: ${primaryError}. Gemini: ${geminiErr?.message || 'Erro desconhecido'}.`,
+          });
+          return;
+        }
+      } else {
+        res.status(502).json({ success: false, error: primaryError });
+        return;
+      }
+    }
+  }
+
+  const durationMs = Date.now() - startTime;
+
+  res.json({
+    success: true,
+    data: parsedResult,
+    providerUsed: executedProvider,
+    modelUsed: executedModel,
+    fallbackTriggered,
+    primaryError,
+    complexityLevel,
+    activeMode,
+    durationMs,
+  });
+});
 
 // Endpoint Central de Comando de IA (V2.4)
 app.post('/api/groq/command', async (req, res) => {
