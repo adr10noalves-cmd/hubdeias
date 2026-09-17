@@ -18,6 +18,7 @@ const CATEGORY_COLORS: Record<EvolutionLogCategory, { bg: string; text: string; 
   Teste: { bg: 'bg-amber-500/20', text: 'text-amber-300', border: 'border-amber-500/30' },
   Ideia: { bg: 'bg-purple-500/20', text: 'text-purple-300', border: 'border-purple-500/30' },
   Validação: { bg: 'bg-teal-500/20', text: 'text-teal-300', border: 'border-teal-500/30' },
+  Marco: { bg: 'bg-blue-500/20', text: 'text-blue-300', border: 'border-blue-500/30' },
 };
 
 export const IdeaDiaryTab: React.FC<IdeaDiaryTabProps> = ({

@@ -351,7 +351,8 @@ export type EvolutionLogCategory =
   | 'Obstáculo'
   | 'Teste'
   | 'Ideia'
-  | 'Validação';
+  | 'Validação'
+  | 'Marco';
 
 export const EVOLUTION_LOG_CATEGORIES: EvolutionLogCategory[] = [
   'Descoberta',
@@ -361,6 +362,7 @@ export const EVOLUTION_LOG_CATEGORIES: EvolutionLogCategory[] = [
   'Teste',
   'Ideia',
   'Validação',
+  'Marco',
 ];
 
 export interface EvolutionLog {
@@ -424,7 +426,8 @@ export type ExecutionValidationStatus =
   | 'resposta_validada'
   | 'erro'
   | 'execucao_incompleta'
-  | 'resultado_pendente';
+  | 'resultado_pendente'
+  | 'falha_validacao';
 
 export interface TaskPlanStep {
   stepNumber: number;
@@ -459,10 +462,26 @@ export interface ContextualPromptData {
 export interface AIModelRecommendation {
   modelId: string;
   modelName: string;
-  provider: 'Groq' | 'Gemini' | 'Anthropic' | 'OpenAI' | 'Local';
+  provider: 'Groq' | 'Gemini' | 'Anthropic' | 'OpenAI' | 'Local' | 'GEMINI' | 'GROQ';
   costTier: 'FREE' | 'LOW' | 'MEDIUM' | 'HIGH';
   specialtyMatch: string;
   reasoning: string;
+}
+
+export interface StructuredAssistantContext {
+  projectId?: string;
+  projectTitle?: string;
+  projectDescription?: string;
+  currentStage?: string;
+  currentVersion?: string;
+  objective?: string;
+  lastEvolution?: string;
+  currentProblems?: string[];
+  decisions?: string[];
+  nextSteps?: string[];
+  relatedStudies?: Array<{ id?: string; theme: string; level: string; progress: number }>;
+  recentLogs?: Array<{ text: string; category: string; createdAt: string }>;
+  summaryForAI: string;
 }
 
 export interface ProjectLearningEntry {
@@ -501,20 +520,46 @@ export interface OperationalExecutionRecord {
   createdAt: string;
 }
 
-export interface StructuredAssistantContext {
-  projectId?: string;
-  projectTitle?: string;
-  projectDescription?: string;
-  currentStage?: string;
-  currentVersion?: string;
-  objective?: string;
-  lastEvolution?: string;
-  currentProblems: string[];
-  decisions: string[];
-  nextSteps: string[];
-  relatedStudies: Array<{ id: string; theme: string; level: string; progress: number }>;
-  recentLogs: Array<{ text: string; category: string; createdAt: string }>;
-  summaryForAI: string;
+export type ProjectHubStatus =
+  | 'Ideia'
+  | 'Planejamento'
+  | 'Em desenvolvimento'
+  | 'Em teste'
+  | 'Concluído'
+  | 'Em evolução';
+
+export const PROJECT_HUB_STATUSES: ProjectHubStatus[] = [
+  'Ideia',
+  'Planejamento',
+  'Em desenvolvimento',
+  'Em teste',
+  'Concluído',
+  'Em evolução',
+];
+
+export interface ProjectHistoryItem {
+  id: string;
+  date: string;
+  description: string;
+  author?: string;
 }
+
+export interface ProjectHubItem {
+  id: string;
+  name: string;
+  description: string;
+  objective: string;
+  expectedResult?: string;
+  createdAt: string;
+  updatedAt: string;
+  status: ProjectHubStatus;
+  currentStage: string;
+  nextAction: string;
+  progress: number; // 0 a 100
+  aiTools: string[];
+  notes: string;
+  history: ProjectHistoryItem[];
+}
+
 
 

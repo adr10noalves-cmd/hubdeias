@@ -34,7 +34,10 @@ import { EvolutionDiaryGlobalView } from './components/strategic/EvolutionDiaryG
 import { EvolutionDashboard } from './components/strategic/EvolutionDashboard';
 import { GlobalSearchModal } from './components/strategic/GlobalSearchModal';
 import { IdeaDetailModal } from './components/strategic/IdeaDetailModal';
-import { IdeaItem, StudyItem, EvolutionLog } from './types';
+import { IdeaItem, StudyItem, EvolutionLog, ProjectHubItem } from './types';
+import { ProjectsManager } from './components/strategic/ProjectsManager';
+import { ProjectDetailView } from './components/strategic/ProjectDetailView';
+import { getProjects, saveSingleProject, deleteProject } from './services/projectsService';
 import {
   subscribeToIdeas,
   subscribeToStudies,
@@ -144,6 +147,8 @@ export default function App() {
   const [ideas, setIdeas] = useState<IdeaItem[]>([]);
   const [studies, setStudies] = useState<StudyItem[]>([]);
   const [evolutionLogs, setEvolutionLogs] = useState<EvolutionLog[]>([]);
+  const [projects, setProjects] = useState<ProjectHubItem[]>(() => getProjects());
+  const [selectedProjectDetail, setSelectedProjectDetail] = useState<ProjectHubItem | null>(null);
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState(false);
   const [selectedIdeaDetail, setSelectedIdeaDetail] = useState<IdeaItem | null>(null);
   const [isIdeaDetailOpen, setIsIdeaDetailOpen] = useState(false);
@@ -477,9 +482,13 @@ export default function App() {
         {/* 🧭 NAVEGAÇÃO ESTRATÉGICA DO HUB (Catálogo vs Ideias & Projetos vs Banco de Estudos vs Diário vs Dashboard) */}
         <StrategicNavTabs
           currentView={currentHubView}
-          onChangeView={setCurrentHubView}
+          onChangeView={(view) => {
+            setCurrentHubView(view);
+            if (view !== 'projects') setSelectedProjectDetail(null);
+          }}
           onOpenGlobalSearch={() => setIsGlobalSearchOpen(true)}
           ideasCount={ideas.length}
+          projectsCount={projects.length}
           studiesCount={studies.length}
           logsCount={evolutionLogs.length}
         />
@@ -625,6 +634,38 @@ export default function App() {
             {/* Sobre o Projeto drico IAS (V2.0) */}
             <AboutSection totalIAs={ias.length} />
           </>
+        )}
+
+        {/* ========================================================================= */}
+        {/* VISÃO: MEUS PROJETOS (Fundação estrutural de projetos acompanhados) */}
+        {/* ========================================================================= */}
+        {currentHubView === 'projects' && (
+          selectedProjectDetail ? (
+            <ProjectDetailView
+              project={selectedProjectDetail}
+              onBack={() => setSelectedProjectDetail(null)}
+              onUpdate={(updated) => {
+                saveSingleProject(updated);
+                setProjects(getProjects());
+                setSelectedProjectDetail(updated);
+              }}
+            />
+          ) : (
+            <ProjectsManager
+              projects={projects}
+              onSelectProject={(proj) => setSelectedProjectDetail(proj)}
+              onCreateProject={(newProj) => {
+                saveSingleProject(newProj);
+                const updatedList = getProjects();
+                setProjects(updatedList);
+                setSelectedProjectDetail(newProj);
+              }}
+              onDeleteProject={(id) => {
+                deleteProject(id);
+                setProjects(getProjects());
+              }}
+            />
+          )
         )}
 
         {/* ========================================================================= */}

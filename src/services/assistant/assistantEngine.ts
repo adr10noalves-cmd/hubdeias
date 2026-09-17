@@ -116,7 +116,11 @@ export async function processAssistantMessage(
     lastEvolution: filteredContext.recentChangesSummary[0],
     currentProblems: filteredContext.knownProblems,
     nextSteps: filteredContext.nextSteps,
-    relatedStudiesThemes: filteredContext.relevantStudies.map((s) => s.theme),
+    relatedStudies: filteredContext.relevantStudies.map((s) => ({
+      theme: s.theme,
+      level: s.level,
+      progress: s.progress,
+    })),
     summaryForAI: filteredContext.contextSummaryText,
   };
 

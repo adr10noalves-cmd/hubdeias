@@ -9,13 +9,14 @@ import {
   Sparkles,
 } from 'lucide-react';
 
-export type MainHubView = 'catalog' | 'ideas' | 'studies' | 'diary' | 'dashboard';
+export type MainHubView = 'catalog' | 'ideas' | 'projects' | 'studies' | 'diary' | 'dashboard';
 
 interface StrategicNavTabsProps {
   currentView: MainHubView;
   onChangeView: (view: MainHubView) => void;
   onOpenGlobalSearch: () => void;
   ideasCount: number;
+  projectsCount: number;
   studiesCount: number;
   logsCount: number;
 }
@@ -25,6 +26,7 @@ export const StrategicNavTabs: React.FC<StrategicNavTabsProps> = ({
   onChangeView,
   onOpenGlobalSearch,
   ideasCount,
+  projectsCount,
   studiesCount,
   logsCount,
 }) => {
@@ -60,6 +62,23 @@ export const StrategicNavTabs: React.FC<StrategicNavTabsProps> = ({
           <span>Ideias & Projetos</span>
           <span className="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] font-bold text-cyan-300 border border-slate-700">
             {ideasCount}
+          </span>
+        </button>
+
+        {/* Aba 2.5: Meus Projetos (Fundação de Projetos Acompanhados) */}
+        <button
+          type="button"
+          onClick={() => onChangeView('projects')}
+          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+            currentView === 'projects'
+              ? 'bg-gradient-to-r from-cyan-500 to-indigo-600 text-white shadow-[0_0_20px_rgba(6,182,212,0.4)]'
+              : 'text-slate-300 hover:text-white hover:bg-slate-800'
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-cyan-400" />
+          <span>Meus Projetos</span>
+          <span className="px-1.5 py-0.2 rounded-full bg-slate-800 text-[10px] font-bold text-cyan-300 border border-slate-700">
+            {projectsCount}
           </span>
         </button>
 
