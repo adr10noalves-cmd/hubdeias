@@ -85,25 +85,106 @@ export async function executeGemini(params: {
 
   for (const model of modelsToTry) {
     try {
-      const config: any = {
-        temperature: 0.25,
-      };
+      let responseText = '';
+      
+      // Tentativa 1: SDK oficial
+      if (ai) {
+        try {
+          const config: any = {
+            temperature: 0.25,
+          };
 
-      if (params.systemPrompt && params.systemPrompt.trim() !== '') {
-        config.systemInstruction = params.systemPrompt;
+          if (params.systemPrompt && params.systemPrompt.trim() !== '') {
+            config.systemInstruction = params.systemPrompt;
+          }
+
+          if (params.jsonMode) {
+            config.responseMimeType = 'application/json';
+          }
+
+          const response = await ai.models.generateContent({
+            model,
+            contents: params.userPrompt,
+            config,
+          });
+
+          responseText = response.text || '';
+        } catch (sdkErr: any) {
+          // Fallback transparente para chamada direta via fetch REST oficial
+          const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+          const contentsPayload: any[] = [];
+          
+          if (params.systemPrompt && params.systemPrompt.trim() !== '') {
+            contentsPayload.push({
+              role: 'user',
+              parts: [{ text: `Instruções do Sistema:\n${params.systemPrompt}\n\nTarefa do Usuário:\n${params.userPrompt}` }],
+            });
+          } else {
+            contentsPayload.push({
+              role: 'user',
+              parts: [{ text: params.userPrompt }],
+            });
+          }
+
+          const restResp = await fetch(restUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: contentsPayload,
+              generationConfig: {
+                temperature: 0.25,
+                responseMimeType: params.jsonMode ? 'application/json' : undefined,
+              },
+            }),
+          });
+
+          if (!restResp.ok) {
+            const errData = await restResp.json().catch(() => ({}));
+            throw new Error(errData?.error?.message || `HTTP ${restResp.status} na API REST do Gemini`);
+          }
+
+          const restJson = await restResp.json();
+          responseText = restJson?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        }
+      } else {
+        // Sem SDK, usar REST direto com fetch nativo (100% compativel com serverless Vercel)
+        const restUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const contentsPayload: any[] = [];
+        
+        if (params.systemPrompt && params.systemPrompt.trim() !== '') {
+          contentsPayload.push({
+            role: 'user',
+            parts: [{ text: `Instruções do Sistema:\n${params.systemPrompt}\n\nTarefa do Usuário:\n${params.userPrompt}` }],
+          });
+        } else {
+          contentsPayload.push({
+            role: 'user',
+            parts: [{ text: params.userPrompt }],
+          });
+        }
+
+        const restResp = await fetch(restUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: contentsPayload,
+            generationConfig: {
+              temperature: 0.25,
+              responseMimeType: params.jsonMode ? 'application/json' : undefined,
+            },
+          }),
+        });
+
+        if (!restResp.ok) {
+          const errData = await restResp.json().catch(() => ({}));
+          throw new Error(errData?.error?.message || `HTTP ${restResp.status} na API REST do Gemini`);
+        }
+
+        const restJson = await restResp.json();
+        responseText = restJson?.candidates?.[0]?.content?.parts?.[0]?.text || '';
       }
 
-      if (params.jsonMode) {
-        config.responseMimeType = 'application/json';
-      }
-
-      const response = await ai.models.generateContent({
-        model,
-        contents: params.userPrompt,
-        config,
-      });
-
-      const text = response.text || '';
+      const text = responseText;
       if (!text || text.trim() === '') {
         throw new Error(`Resposta vazia retornada pelo modelo ${model}`);
       }

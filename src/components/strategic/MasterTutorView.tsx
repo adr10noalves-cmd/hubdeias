@@ -83,20 +83,27 @@ export const MasterTutorView: React.FC = () => {
           data = { success: true, data: { response: rawText } };
         }
 
-        if (data.success && data.data) {
+        if (res.status === 500 && (rawText.includes('FUNCTION_INVOCATION_FAILED') || rawText.includes('server error'))) {
+          tutorReply = `⚠️ **Falha no Servidor Serverless da Vercel (FUNCTION_INVOCATION_FAILED)**\n\n` +
+            `O backend da Vercel não conseguiu processar a requisição. Verifique:\n` +
+            `1. Se o código mais recente com as rotas de API foi enviado para o GitHub (\`git push\`).\n` +
+            `2. Se as variáveis de ambiente **\`GEMINI_API_KEY\`** e **\`GROQ_API_KEY\`** foram adicionadas no painel da Vercel (**Settings -> Environment Variables**) e se um **Redeploy** foi acionado sem cache.`;
+        } else if (data.success && (data.data || data.text)) {
           if (typeof data.data === 'string') {
             tutorReply = data.data;
-          } else if (data.data.response) {
+          } else if (data.data?.response) {
             tutorReply = data.data.response;
-          } else if (data.data.text) {
+          } else if (data.text) {
+            tutorReply = data.text;
+          } else if (data.data?.text) {
             tutorReply = data.data.text;
-          } else if (data.data.message) {
+          } else if (data.data?.message) {
             tutorReply = data.data.message;
           } else {
             tutorReply = JSON.stringify(data.data, null, 2);
           }
         } else {
-          tutorReply = data.error || 'Não foi possível gerar a resposta no momento. Tente novamente.';
+          tutorReply = data.primaryError || data.error || data.diagnostic?.message || 'Não foi possível gerar a resposta no momento. Tente novamente.';
         }
       } catch (parseErr: any) {
         tutorReply = `Erro no processamento da resposta: ${parseErr?.message || 'Falha ao decodificar'}`;
