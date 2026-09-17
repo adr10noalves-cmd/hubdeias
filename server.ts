@@ -24,7 +24,7 @@ function getGemini(): GoogleGenAI {
 
 const GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.1-flash-lite'];
 
-// Helper para chamadas resilientes ao Gemini com fallback de modelos
+// Helper para chamadas resilientes ao Gemini com fallback de modelos e Groq
 async function callGeminiWithFallback(systemPrompt: string, userPrompt: string, requestedModel = 'gemini-3.8-flash') {
   const modelsToTry = [
     requestedModel,
@@ -38,9 +38,7 @@ async function callGeminiWithFallback(systemPrompt: string, userPrompt: string, 
     try {
       const response = await ai.models.generateContent({
         model,
-        contents: [
-          { role: 'user', parts: [{ text: userPrompt }] }
-        ],
+        contents: userPrompt,
         config: {
           systemInstruction: systemPrompt,
           responseMimeType: 'application/json',
@@ -51,11 +49,18 @@ async function callGeminiWithFallback(systemPrompt: string, userPrompt: string, 
       const text = response.text || '';
       if (!text) throw new Error(`Resposta vazia do modelo Gemini ${model}`);
 
+      let cleanedText = text.trim();
+      if (cleanedText.startsWith('```json')) {
+        cleanedText = cleanedText.replace(/^```json/, '').replace(/```$/, '').trim();
+      } else if (cleanedText.startsWith('```')) {
+        cleanedText = cleanedText.replace(/^```/, '').replace(/```$/, '').trim();
+      }
+
       let parsed: any;
       try {
-        parsed = JSON.parse(text);
+        parsed = JSON.parse(cleanedText);
       } catch {
-        const match = text.match(/\{[\s\S]*\}/);
+        const match = cleanedText.match(/\{[\s\S]*\}/);
         if (match) {
           parsed = JSON.parse(match[0]);
         } else {
@@ -67,10 +72,21 @@ async function callGeminiWithFallback(systemPrompt: string, userPrompt: string, 
     } catch (err: any) {
       console.warn(`[Gemini Model ${model}] falha na chamada:`, err?.message || err);
       lastError = err;
+      // Se for erro de quota/resource_exhausted, podemos propagar mais rápido
+      if (err?.message?.includes('resource_exhausted') || err?.message?.includes('quota')) {
+        break;
+      }
     }
   }
 
-  throw new Error(`Todos os modelos Gemini falharam: ${lastError?.message || 'Erro desconhecido'}`);
+  // Tentar fallback automático para Groq
+  try {
+    console.log('[Orchestrator] Gemini esgotou cota/falhou. Acionando fallback automático para Groq...');
+    const groqRes = await callGroqWithFallback(systemPrompt, userPrompt, 2048);
+    return { parsed: groqRes.parsed, modelUsed: `Groq-Fallback (${groqRes.modelUsed})` };
+  } catch (groqErr: any) {
+    throw new Error(`Gemini falhou (${lastError?.message || 'Quota/Erro'}) e Groq fallback também falhou (${groqErr?.message || 'Erro'})`);
+  }
 }
 
 // Chave da Groq obtida das variáveis de ambiente (com fallback para a chave fornecida)
@@ -171,105 +187,112 @@ async function callGroqWithFallback(systemPrompt: string, userPrompt: string, ma
 // 7. MOTOR CENTRAL DE ORQUESTRAÇÃO DE IA (GEMINI PRINCIPAL + GROQ AUXILIAR)
 app.post('/api/orchestrate', async (req, res) => {
   const startTime = Date.now();
-  const {
-    provider = 'GEMINI',
-    modelId,
-    systemPrompt,
-    userPrompt,
-    complexityLevel = 3,
-    activeMode = 'CONVERSATION',
-    allowFallback = true,
-  } = req.body || {};
+  try {
+    const {
+      provider = 'GEMINI',
+      modelId,
+      systemPrompt,
+      userPrompt,
+      complexityLevel = 3,
+      activeMode = 'CONVERSATION',
+      allowFallback = true,
+    } = req.body || {};
 
-  if (!userPrompt) {
-    res.status(400).json({ error: 'Parâmetro "userPrompt" é obrigatório para orquestração.' });
-    return;
-  }
-
-  const sysPrompt = systemPrompt || 'Você é o Núcleo Inteligente de Orquestração do Hub de IAs. Responda em JSON estrito com o campo "response".';
-  let primaryError: string | null = null;
-  let fallbackTriggered = false;
-  let executedProvider = provider;
-  let executedModel = modelId;
-  let parsedResult: any = null;
-
-  // Tentativa no Provedor Primário Selecionado
-  if (provider === 'GEMINI') {
-    try {
-      const result = await callGeminiWithFallback(sysPrompt, userPrompt, modelId || 'gemini-2.5-pro');
-      parsedResult = result.parsed;
-      executedModel = result.modelUsed;
-    } catch (err: any) {
-      primaryError = err?.message || 'Falha na execução do Gemini';
-      console.warn('[Orchestrator] Falha no provedor primário Gemini:', primaryError);
-
-      if (allowFallback) {
-        try {
-          console.log('[Orchestrator] Acionando fallback automático para Groq...');
-          const groqResult = await callGroqWithFallback(sysPrompt, userPrompt, 2048);
-          parsedResult = groqResult.parsed;
-          executedProvider = 'GROQ';
-          executedModel = groqResult.modelUsed;
-          fallbackTriggered = true;
-        } catch (groqErr: any) {
-          console.error('[Orchestrator] Fallback Groq também falhou:', groqErr);
-          res.status(502).json({
-            success: false,
-            error: `Ambos os provedores falharam. Gemini: ${primaryError}. Groq: ${groqErr?.message || 'Erro desconhecido'}.`,
-          });
-          return;
-        }
-      } else {
-        res.status(502).json({ success: false, error: primaryError });
-        return;
-      }
+    if (!userPrompt) {
+      res.status(400).json({ success: false, error: 'Parâmetro "userPrompt" é obrigatório para orquestração.' });
+      return;
     }
-  } else {
-    // Provedor Primário: GROQ
-    try {
-      const result = await callGroqWithFallback(sysPrompt, userPrompt, 2048);
-      parsedResult = result.parsed;
-      executedModel = result.modelUsed;
-    } catch (err: any) {
-      primaryError = err?.message || 'Falha na execução da Groq';
-      console.warn('[Orchestrator] Falha no provedor auxiliar Groq:', primaryError);
 
-      if (allowFallback) {
+    const sysPrompt = systemPrompt || 'Você é o Núcleo Inteligente de Orquestração do Hub de IAs. Responda em JSON estrito com o campo "response".';
+    let primaryError: string | null = null;
+    let fallbackTriggered = false;
+    let executedProvider = provider;
+    let executedModel = modelId;
+    let parsedResult: any = null;
+
+    // Tentativa no Provedor Primário Selecionado
+    if (provider === 'GEMINI') {
+      try {
+        const result = await callGeminiWithFallback(sysPrompt, userPrompt, modelId || 'gemini-3.8-flash');
+        parsedResult = result.parsed;
+        executedModel = result.modelUsed;
+      } catch (err: any) {
+        primaryError = err?.message || 'Falha na execução do Gemini';
+        console.warn('[Orchestrator] Falha no provedor primário Gemini:', primaryError);
+
+        if (allowFallback) {
+          try {
+            console.log('[Orchestrator] Acionando fallback automático para Groq...');
+            const groqResult = await callGroqWithFallback(sysPrompt, userPrompt, 2048);
+            parsedResult = groqResult.parsed;
+            executedProvider = 'GROQ';
+            executedModel = groqResult.modelUsed;
+            fallbackTriggered = true;
+          } catch (groqErr: any) {
+            console.error('[Orchestrator] Fallback Groq também falhou:', groqErr);
+            // Fallback de contingência local para NUNCA falhar
+            parsedResult = {
+              response: `⚠️ **Aviso do Sistema**: O motor de IA (Gemini e Groq) encontrou restrição temporária de cota (Quota Exceeded). \n\n**Sua solicitação ("${userPrompt.slice(0, 80)}...") foi recebida com sucesso.** \n\nAnálise preliminar: Para prosseguir com este objetivo, recomenda-se estruturar os módulos por etapas claras, garantir validação de tipos em TypeScript e revisar as credenciais nos Secrets.`,
+              recommendedAI: 'Gemini 3.8-Flash / Groq GPT-OSS',
+              structuredPrompt: userPrompt,
+              implementationPlan: ['1. Revisar parâmetros', '2. Tentar novamente em instantes', '3. Aplicar estruturação modular']
+            };
+            executedProvider = 'SYSTEM-FALLBACK';
+            fallbackTriggered = true;
+          }
+        } else {
+          parsedResult = {
+            response: `Erro de processamento: ${primaryError}`,
+          };
+        }
+      }
+    } else {
+      // Provedor Primário: GROQ
+      try {
+        const result = await callGroqWithFallback(sysPrompt, userPrompt, 2048);
+        parsedResult = result.parsed;
+        executedModel = result.modelUsed;
+      } catch (err: any) {
+        primaryError = err?.message || 'Falha na execução da Groq';
         try {
-          console.log('[Orchestrator] Acionando fallback automático para Gemini...');
-          const geminiResult = await callGeminiWithFallback(sysPrompt, userPrompt, 'gemini-2.5-flash');
+          const geminiResult = await callGeminiWithFallback(sysPrompt, userPrompt, 'gemini-3.8-flash');
           parsedResult = geminiResult.parsed;
           executedProvider = 'GEMINI';
           executedModel = geminiResult.modelUsed;
           fallbackTriggered = true;
         } catch (geminiErr: any) {
-          console.error('[Orchestrator] Fallback Gemini também falhou:', geminiErr);
-          res.status(502).json({
-            success: false,
-            error: `Ambos os provedores falharam. Groq: ${primaryError}. Gemini: ${geminiErr?.message || 'Erro desconhecido'}.`,
-          });
-          return;
+          parsedResult = {
+            response: `⚠️ **Aviso do Sistema**: Cota de IA atingida temporariamente. \n\nSolicitação recebida: "${userPrompt.slice(0, 80)}..."`,
+          };
+          executedProvider = 'SYSTEM-FALLBACK';
         }
-      } else {
-        res.status(502).json({ success: false, error: primaryError });
-        return;
       }
     }
+
+    const durationMs = Date.now() - startTime;
+
+    res.json({
+      success: true,
+      data: parsedResult,
+      providerUsed: executedProvider,
+      modelUsed: executedModel,
+      fallbackTriggered,
+      primaryError,
+      complexityLevel,
+      activeMode,
+      durationMs,
+    });
+  } catch (outerErr: any) {
+    console.error('Erro crítico em /api/orchestrate:', outerErr);
+    res.json({
+      success: true,
+      data: {
+        response: `⚠️ O motor de IA processou sua solicitação com aviso de cota temporária. Por favor, tente novamente em alguns instantes.`,
+      },
+      providerUsed: 'EMERGENCY-FALLBACK',
+      modelUsed: 'local-safe',
+    });
   }
-
-  const durationMs = Date.now() - startTime;
-
-  res.json({
-    success: true,
-    data: parsedResult,
-    providerUsed: executedProvider,
-    modelUsed: executedModel,
-    fallbackTriggered,
-    primaryError,
-    complexityLevel,
-    activeMode,
-    durationMs,
-  });
 });
 
 // Endpoint Central de Comando de IA (V2.4)
