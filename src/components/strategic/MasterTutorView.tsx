@@ -40,7 +40,7 @@ export const MasterTutorView: React.FC = () => {
     scrollToBottom();
   }, [messages, isThinking]);
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputMessage.trim() || isThinking) return;
 
@@ -59,16 +59,26 @@ export const MasterTutorView: React.FC = () => {
     setMessages(updated);
     setIsThinking(true);
 
-    setTimeout(() => {
-      let tutorReply = '';
-      const lower = userText.toLowerCase();
+    try {
+      const res = await fetch('/api/orchestrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'GEMINI',
+          modelId: 'gemini-2.5-pro',
+          systemPrompt: `Você é o Receptor Mestre, o agente pedagógico mais avançado do Hub, potencializado pelo motor máximo da Gemini. O usuário está estudando no modo "${studyMode}". Forneça uma resposta rica, profunda, estruturada em Markdown, didática e completa, explicando conceitos fundamentais e práticos. Retorne um JSON estrito com o campo "response".`,
+          userPrompt: userText,
+          complexityLevel: 5,
+          activeMode: 'MASTER_TUTOR',
+        }),
+      });
 
-      if (studyMode === 'Quiz Interativo') {
-        tutorReply = `Excelente! Vamos testar seus conhecimentos sobre **"${userText}"**:\n\n**Questão 1:** Qual é o principal benefício de aplicar este conceito em ambientes de produção de alta escala?\n\n- A) Redução de custos de servidores físicos\n- B) Isolamento de falhas e escalabilidade desacoplada\n- C) Eliminação total de testes automatizados\n\nResponda qual alternativa você escolhe e explicarei detalhadamente o porquê!`;
-      } else if (studyMode === 'Plano de Estudos') {
-        tutorReply = `Aqui está o seu **Plano de Estudos Personalizado** gerado pelo Receptor Mestre para **"${userText}"**:\n\n1. **Fundamentos e Teoria Essencial** (Duração: 2 dias)\n   - Conceitos fundamentais, terminologias e motivação de uso.\n2. **Arquitetura e Padrões de Projeto** (Duração: 3 dias)\n   - Como estruturar na prática com exemplos em TypeScript/Node.\n3. **Segurança, Boas Práticas e Resiliência** (Duração: 2 dias)\n   - Tratamento de falhas, logs e monitoramento.\n4. **Projeto Prático de Fixação** (Duração: 3 dias)\n   - Desenvolvimento de um protótipo funcional integrado.\n\nDeseja aprofundar o Módulo 1 agora?`;
+      const data = await res.json();
+      let tutorReply = '';
+      if (data.success && data.data) {
+        tutorReply = data.data.response || data.data.text || JSON.stringify(data.data);
       } else {
-        tutorReply = `### Masterclass do Receptor Mestre: ${userText}\n\nPara dominar este tópico com excelência, devemos compreender os 3 pilares fundamentais:\n\n1. **Contexto Histórico e Necessidade**: Por que essa tecnologia/conceito foi criado e quais problemas ele resolve.\n2. **Funcionamento Interno**: Como os componentes interagem em tempo de execução.\n3. **Aplicação Prática no Mercado**: Casos de uso reais em arquiteturas modernas full-stack.\n\n*O poder da Gemini garante que você compreenda não apenas o "como fazer", mas principalmente o "por que fazer". Tem alguma dúvida específica sobre algum desses pilares?*`;
+        tutorReply = `Erro na resposta do Receptor Mestre: ${data.error || 'Falha de conexão'}. Verifique se a GEMINI_API_KEY está configurada no ambiente.`;
       }
 
       const tutorMsg: TutorMessage = {
@@ -81,11 +91,21 @@ export const MasterTutorView: React.FC = () => {
 
       const finalMsgs = [...updated, tutorMsg];
       setMessages(finalMsgs);
-      setIsThinking(false);
       try {
         localStorage.setItem('hub_receptor_mestre_sessions_v1', JSON.stringify(finalMsgs));
       } catch {}
-    }, 1100);
+    } catch (err: any) {
+      const errorMsg: TutorMessage = {
+        id: `msg-${Date.now()}-err`,
+        sender: 'tutor',
+        text: `Erro de comunicação com o motor Gemini: ${err?.message || 'Erro desconhecido'}.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        mode: studyMode,
+      };
+      setMessages([...updated, errorMsg]);
+    } finally {
+      setIsThinking(false);
+    }
   };
 
   const handleClearHistory = () => {
@@ -108,12 +128,12 @@ export const MasterTutorView: React.FC = () => {
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-cyan-900 text-cyan-300 border border-cyan-700 uppercase tracking-widest">
-                  Agente de Ensino Avançado
+                  Agente de Ensino Avançado (Gemini 2.5 Pro)
                 </span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Receptor Mestre</h1>
               <p className="text-slate-400 text-xs sm:text-sm max-w-2xl leading-relaxed">
-                Seu tutor de inteligência artificial dedicado ao aprendizado profundo. Utilize o poder máximo da Gemini para masterclasses, planos de estudo, quizzes e explicações passo a passo.
+                Seu tutor de inteligência artificial dedicado ao aprendizado profundo. Utiliza o motor real da Gemini para masterclasses, planos de estudo, quizzes e explicações passo a passo.
               </p>
             </div>
           </div>
@@ -152,8 +172,8 @@ export const MasterTutorView: React.FC = () => {
       <div className="bg-slate-900/90 border border-slate-800 rounded-2xl shadow-xl flex flex-col h-[550px] overflow-hidden">
         <div className="px-5 py-3.5 border-b border-slate-800 bg-slate-950/80 flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs text-slate-300">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Modo Ativo: <strong className="text-cyan-300">{studyMode}</strong> (Motor Gemini Avançado)</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
+            <span>Modo Ativo: <strong className="text-cyan-300">{studyMode}</strong> (Motor Gemini 2.5 Pro)</span>
           </div>
           <div className="text-xs text-slate-400">
             {messages.length} mensagens na sessão
@@ -202,7 +222,7 @@ export const MasterTutorView: React.FC = () => {
                 <span className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce" />
                 <span className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce [animation-delay:0.2s]" />
                 <span className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce [animation-delay:0.4s]" />
-                <span className="ml-2 font-medium text-slate-300">Receptor Mestre estruturando explicação pedagógica...</span>
+                <span className="ml-2 font-medium text-slate-300">Gemini 2.5 Pro estruturando explicação pedagógica...</span>
               </div>
             </div>
           )}

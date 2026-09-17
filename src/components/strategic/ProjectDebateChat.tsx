@@ -27,7 +27,7 @@ export const ProjectDebateChat: React.FC<ProjectDebateChatProps> = ({
     scrollToBottom();
   }, [messages, isTyping]);
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() || isTyping) return;
 
@@ -35,23 +35,34 @@ export const ProjectDebateChat: React.FC<ProjectDebateChatProps> = ({
     setInputText('');
     setIsTyping(true);
 
-    setTimeout(() => {
-      let aiReply = '';
-      const lower = userText.toLowerCase();
+    try {
+      const res = await fetch('/api/orchestrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'GEMINI',
+          modelId: 'gemini-2.5-pro',
+          systemPrompt: `Você é o Arquiteto e Consultor Técnico Especializado do projeto "${project.name}" (Objetivo: ${project.objective}). O projeto está na etapa "${project.currentStage}" com status "${project.status}" e ${project.progress}% de progresso. Responda em JSON estrito com o campo "response" contendo sua análise técnica profunda, conselhos arquiteturais e sugestões práticas em Markdown.`,
+          userPrompt: userText,
+          complexityLevel: 4,
+          activeMode: 'DEBATE_PROJECT',
+        }),
+      });
 
-      if (lower.includes('notificação') || lower.includes('notificacoes')) {
-        aiReply = `Analisando o projeto **"${project.name}"** (Objetivo: ${project.objective}), a adição de notificações é altamente pertinente para engajar os usuários. Como o status atual é *${project.status}* e a etapa é *"${project.currentStage}"*, sugiro implementarmos via WebSockets ou Firebase Cloud Messaging na próxima versão. Deseja que eu registre uma decisão arquitetural ou crie uma missão para isso?`;
-      } else if (lower.includes('banco') || lower.includes('dados') || lower.includes('firebase')) {
-        aiReply = `Com base na arquitetura e no objetivo atual de "${project.name}", a persistência em nuvem (como Firestore) garante a integridade dos dados e sincronização em múltiplos dispositivos. Recomendo mantermos a camada de dados isolada em serviços dedicados.`;
-      } else if (lower.includes('segurança') || lower.includes('lgpd')) {
-        aiReply = `Para garantir conformidade e segurança em "${project.name}", devemos validar os acessos por papéis (RBAC) e criptografia em trânsito. Essa é uma excelente diretriz a ser registrada na seção de Decisões.`;
+      const data = await res.json();
+      let aiReply = '';
+      if (data.success && data.data) {
+        aiReply = data.data.response || data.data.text || JSON.stringify(data.data);
       } else {
-        aiReply = `Compreendi sua questão sobre **"${project.name}"**. Analisando o contexto (Progresso atual: ${project.progress}%, Próxima ação: "${project.nextAction}"), esta alteração trará impacto positivo na eficiência. Recomendo avaliarmos as dependências técnicas antes de iniciar a codificação. Como deseja prosseguir?`;
+        aiReply = `Erro na resposta da IA: ${data.error || 'Falha desconhecida'}. Verifique se a GEMINI_API_KEY está configurada no servidor.`;
       }
 
       onSendMessage(userText, aiReply);
+    } catch (err: any) {
+      onSendMessage(userText, `Erro de conexão com o servidor de IA: ${err?.message || 'Erro'}`);
+    } finally {
       setIsTyping(false);
-    }, 1000);
+    }
   };
 
   const handleRegisterDecisionFromPrompt = (text: string) => {
@@ -78,13 +89,13 @@ export const ProjectDebateChat: React.FC<ProjectDebateChatProps> = ({
           </div>
           <div>
             <h3 className="font-bold text-white text-sm sm:text-base flex items-center gap-2">
-              Debate com a IA <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800/50">Contexto Ativo</span>
+              Debate com a IA <span className="text-xs font-normal px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-300 border border-cyan-800/50">Gemini 2.5 Pro Ativo</span>
             </h3>
             <p className="text-slate-400 text-xs">Conversa exclusiva contextualizada sobre "{project.name}"</p>
           </div>
         </div>
-        <div className="hidden sm:flex items-center gap-1.5 text-xs text-slate-400 bg-slate-800/80 px-3 py-1 rounded-xl border border-slate-700">
-          <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> Gemini & Groq Engine
+        <div className="hidden sm:flex items-center gap-1.5 text-xs text-cyan-300 bg-cyan-950/60 px-3 py-1 rounded-xl border border-cyan-800/50">
+          <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> Motor Gemini Real
         </div>
       </div>
 
@@ -146,7 +157,7 @@ export const ProjectDebateChat: React.FC<ProjectDebateChatProps> = ({
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce" />
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce [animation-delay:0.2s]" />
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-bounce [animation-delay:0.4s]" />
-              <span className="ml-2 font-medium text-slate-300">Analisando contexto de {project.name}...</span>
+              <span className="ml-2 font-medium text-slate-300">Gemini 2.5 Pro processando raciocínio técnico...</span>
             </div>
           </div>
         )}
@@ -154,18 +165,18 @@ export const ProjectDebateChat: React.FC<ProjectDebateChatProps> = ({
       </div>
 
       {/* Input Form */}
-      <form onSubmit={handleSend} className="p-3.5 sm:p-4 border-t border-slate-800 bg-slate-950/80 flex items-center gap-2">
+      <form onSubmit={handleSend} className="p-4 border-t border-slate-800 bg-slate-950/90 flex items-center gap-3">
         <input
           type="text"
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder={`Converse com a IA sobre "${project.name}" (ex: "Quero adicionar notificações")...`}
-          className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+          placeholder={`Discuta sobre "${project.name}" com a IA...`}
+          className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:border-cyan-500"
         />
         <button
           type="submit"
           disabled={!inputText.trim() || isTyping}
-          className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition-all shadow-lg shadow-cyan-500/20 shrink-0"
+          className="px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition-all shadow-lg shadow-cyan-500/20 shrink-0 cursor-pointer"
         >
           <Send className="w-4 h-4" /> Enviar
         </button>

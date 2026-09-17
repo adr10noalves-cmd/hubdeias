@@ -40,7 +40,7 @@ export const SystemMasterView: React.FC = () => {
   });
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  const handleRunCommand = (e: React.FormEvent) => {
+  const handleRunCommand = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputCommand.trim() || isProcessing) return;
 
@@ -48,19 +48,41 @@ export const SystemMasterView: React.FC = () => {
     setInputCommand('');
     setIsProcessing(true);
 
-    setTimeout(() => {
+    try {
+      const res = await fetch('/api/orchestrate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'GEMINI',
+          modelId: 'gemini-2.5-pro',
+          systemPrompt: `Você é a Mestre Suprema de Engenharia de Software e Orquestração de Sistemas do Hub Estratégico. O usuário solicitou uma implantação, arquitetura ou comando: "${cmdText}".
+Analise detalhadamente e retorne um objeto JSON estrito contendo exatamente os seguintes campos:
+- "recommendedAI": string (qual IA usar, ex: "Gemini 2.5 Pro (Arquitetura) + Groq (Código)")
+- "structuredPrompt": string (o prompt técnico definitivo pronto para ser executado)
+- "implementationPlan": array de strings (passos sequenciais detalhados de implementação)`,
+          userPrompt: cmdText,
+          complexityLevel: 5,
+          activeMode: 'SYSTEM_MASTER',
+        }),
+      });
+
+      const data = await res.json();
+      const parsed = data.success ? data.data : null;
+
       const newCmd: MasterCommandLog = {
         id: `cmd-${Date.now()}`,
         command: cmdText,
         timestamp: new Date().toLocaleString(),
-        recommendedAI: 'Gemini 2.5 Pro (DeepMind Engine) + Groq High-Speed',
-        structuredPrompt: `Atue como Mestre Suprema de Engenharia de Software. Com base na solicitação "${cmdText}", analise a arquitetura ideal, dependências necessárias, tratamento de exceções e padrões de segurança. Forneça código limpo, modular e pronto para produção em TypeScript.`,
-        implementationPlan: [
-          '1. Análise detalhada de requisitos e escopo técnico',
-          '2. Definição da estrutura de dados e contratos de API',
-          '3. Implementação dos módulos principais com validação de tipos',
-          '4. Verificação de segurança e testes de integração',
-        ],
+        recommendedAI: parsed?.recommendedAI || 'Gemini 2.5 Pro (DeepMind Engine) + Groq High-Speed',
+        structuredPrompt: parsed?.structuredPrompt || `Atue como Mestre de Engenharia de Software para implantar: "${cmdText}". Garanta código robusto, modular e seguro em TypeScript/Node.`,
+        implementationPlan: Array.isArray(parsed?.implementationPlan) && parsed.implementationPlan.length > 0
+          ? parsed.implementationPlan
+          : [
+              '1. Análise detalhada de requisitos e escopo técnico',
+              '2. Definição da estrutura de dados e contratos de API',
+              '3. Implementação dos módulos principais com validação de tipos',
+              '4. Verificação de segurança e testes de integração',
+            ],
         status: 'Aguardando Aprovação',
       };
 
@@ -69,8 +91,11 @@ export const SystemMasterView: React.FC = () => {
       try {
         localStorage.setItem('hub_system_master_commands_v1', JSON.stringify(updated));
       } catch {}
+    } catch (err: any) {
+      console.error('Erro ao executar comando Mestre com Gemini:', err);
+    } finally {
       setIsProcessing(false);
-    }, 1200);
+    }
   };
 
   const handleCopyPrompt = (text: string, id: string) => {
@@ -92,17 +117,17 @@ export const SystemMasterView: React.FC = () => {
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-900 text-indigo-300 border border-indigo-700 uppercase tracking-widest">
-                  Centro de Comando Supremo
+                  Centro de Comando Supremo (Gemini 2.5 Pro)
                 </span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">O Mestre do Sistema</h1>
               <p className="text-slate-400 text-xs sm:text-sm max-w-2xl leading-relaxed">
-                Solicite qualquer implantação, arquitetura ou automação. O Mestre analisa sua intenção, descobre as IAs ideais, estrutura os prompts definitivos e monta o plano de execução passo a passo.
+                Solicite qualquer implantação, arquitetura ou automação. O Mestre utiliza o motor real da Gemini para analisar sua intenção, descobrir as IAs ideais, estruturar os prompts definitivos e montar o plano de execução passo a passo.
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 bg-slate-950/80 border border-slate-800 px-4 py-2.5 rounded-xl text-xs text-indigo-300 font-medium">
-            <Sparkles className="w-4 h-4 text-indigo-400" /> Orquestração Ativa
+            <Sparkles className="w-4 h-4 text-indigo-400" /> Motor Gemini Ativo
           </div>
         </div>
       </div>
@@ -133,7 +158,7 @@ export const SystemMasterView: React.FC = () => {
             >
               {isProcessing ? (
                 <>
-                  <RefreshCw className="w-4 h-4 animate-spin" /> O Mestre está processando...
+                  <RefreshCw className="w-4 h-4 animate-spin" /> O Mestre está processando com Gemini...
                 </>
               ) : (
                 <>
