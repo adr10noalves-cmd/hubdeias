@@ -93,8 +93,8 @@ export async function executeGroq(params: {
         lastHttpStatus = resp.status;
         const errBody = await resp.text().catch(() => '');
         lastErrorText = `Status ${resp.status}: ${errBody.slice(0, 150)}`;
-        if (resp.status === 401 || resp.status === 403) {
-          break; // Chave inválida não adianta tentar outros modelos
+        if (resp.status === 401 || resp.status === 403 || resp.status === 429) {
+          break; // Chave inválida ou limite excedido: não adianta tentar outros modelos Groq
         }
       }
     } catch (e: any) {
