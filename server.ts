@@ -416,6 +416,7 @@ app.post('/api/auth/users', (req, res) => {
 
 app.patch('/api/auth/users/:id', (req, res) => {
   const { id } = req.params;
+  const { name, email, role, password, toggleLock, status } = req.body || {};
   const db = loadServerDB();
   const user = db.users.find((u: any) => u.id === id);
   if (!user) {
@@ -423,20 +424,55 @@ app.patch('/api/auth/users/:id', (req, res) => {
     return;
   }
 
-  user.status = user.status === 'locked' || user.status === 'suspended' ? 'active' : 'locked';
-  user.failedAttempts = 0;
-  user.lockedUntil = null;
+  if (name !== undefined) user.name = name.trim();
+  if (email !== undefined) user.email = email.trim();
+  if (role !== undefined) user.role = role;
+  if (status !== undefined) user.status = status;
+
+  if (password && typeof password === 'string' && password.trim().length > 0) {
+    const { salt, hash } = hashPassword(password);
+    user.passwordHash = `${salt}:${hash}`;
+  }
+
+  if (toggleLock) {
+    user.status = user.status === 'locked' || user.status === 'suspended' ? 'active' : 'locked';
+    user.failedAttempts = 0;
+    user.lockedUntil = null;
+  }
+
+  user.updatedAt = new Date().toISOString();
   saveServerDB(db);
 
   logSecurityEventServer({
     userId: user.id,
     username: user.username,
-    event: user.status === 'active' ? 'CONTA_DESBLOQUEADA' : 'CONTA_BLOQUEADA',
-    severity: 'warn',
-    metadata: `Status do usuário alterado para ${user.status} por administrador.`,
+    event: 'ALTERACAO_DE_SENHA',
+    severity: 'info',
+    metadata: `Conta de usuário ${user.username} atualizada por administrador.`,
   });
 
-  res.json({ success: true, status: user.status });
+  res.json({ success: true, user });
+});
+
+app.delete('/api/auth/users/:id', (req, res) => {
+  const { id } = req.params;
+  const db = loadServerDB();
+  const index = db.users.findIndex((u: any) => u.id === id);
+  if (index === -1) {
+    res.status(404).json({ success: false, error: 'Usuário não encontrado.' });
+    return;
+  }
+  const removed = db.users.splice(index, 1)[0];
+  saveServerDB(db);
+
+  logSecurityEventServer({
+    username: removed.username,
+    event: 'USUARIO_DESATIVADO',
+    severity: 'warn',
+    metadata: `Usuário ${removed.username} removido do sistema.`,
+  });
+
+  res.json({ success: true });
 });
 
 app.get('/api/auth/events', (req, res) => {

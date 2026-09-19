@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { UserAccount, SecurityEvent, AuthSession } from '../../types';
-import { Shield, Users, Activity, Lock, Unlock, Key, Trash2, Plus, AlertCircle, CheckCircle2, X, Terminal, Server } from 'lucide-react';
+import { Shield, Users, Activity, Lock, Unlock, Key, Trash2, Plus, AlertCircle, CheckCircle2, X, Terminal, Server, Edit2 } from 'lucide-react';
 
 interface SecurityCenterModalProps {
   currentUser: AuthSession;
@@ -12,6 +12,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
   const [users, setUsers] = useState<UserAccount[]>([]);
   const [events, setEvents] = useState<SecurityEvent[]>([]);
   const [showNewUserModal, setShowNewUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
 
   // Form novo usuário
   const [newUsername, setNewUsername] = useState('');
@@ -19,6 +20,14 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
   const [newEmail, setNewEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<'ADMIN' | 'OPERATOR' | 'USER' | 'GUEST'>('USER');
+
+  // Form edição de usuário
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editRole, setEditRole] = useState<'ADMIN' | 'OPERATOR' | 'USER' | 'GUEST'>('USER');
+  const [editPassword, setEditPassword] = useState('');
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   const isAdmin = currentUser.role === 'ADMIN';
 
@@ -44,7 +53,11 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
   const handleToggleLock = async (userId: string) => {
     if (!isAdmin) return;
     try {
-      const res = await fetch(`/api/auth/users/${userId}`, { method: 'PATCH' });
+      const res = await fetch(`/api/auth/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ toggleLock: true }),
+      });
       if (res.ok) {
         loadSecurityData();
       }
@@ -53,9 +66,28 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
     }
   };
 
+  const handleDeleteUser = async (userId: string, username: string) => {
+    if (!isAdmin) return;
+    if (username === 'admin') {
+      alert('Não é permitido excluir a conta mestre do administrador.');
+      return;
+    }
+    if (!confirm(`Tem certeza que deseja excluir o usuário "${username}"?`)) return;
+
+    try {
+      const res = await fetch(`/api/auth/users/${userId}`, { method: 'DELETE' });
+      if (res.ok) {
+        loadSecurityData();
+      }
+    } catch (err) {
+      console.error('Erro ao excluir usuário:', err);
+    }
+  };
+
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdmin || !newUsername || !newPassword) return;
+    setActionError(null);
 
     try {
       const res = await fetch('/api/auth/users', {
@@ -70,16 +102,66 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
         }),
       });
 
-      if (res.ok) {
+      const data = await res.json();
+      if (res.ok && data.success) {
         setShowNewUserModal(false);
         setNewUsername('');
         setNewName('');
         setNewEmail('');
         setNewPassword('');
+        setNewRole('USER');
         loadSecurityData();
+        setActionSuccess('Usuário cadastrado com sucesso!');
+        setTimeout(() => setActionSuccess(null), 3000);
+      } else {
+        setActionError(data.error || 'Erro ao criar usuário.');
+      }
+    } catch (err: any) {
+      setActionError('Erro de conexão ao criar usuário.');
+    }
+  };
+
+  const handleOpenEdit = (user: UserAccount) => {
+    setEditingUser(user);
+    setEditName(user.name || '');
+    setEditEmail(user.email || '');
+    setEditRole(user.role || 'USER');
+    setEditPassword('');
+    setActionError(null);
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isAdmin || !editingUser) return;
+    setActionError(null);
+
+    try {
+      const payload: any = {
+        name: editName,
+        email: editEmail,
+        role: editRole,
+      };
+      if (editPassword.trim()) {
+        payload.password = editPassword.trim();
+      }
+
+      const res = await fetch(`/api/auth/users/${editingUser.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setEditingUser(null);
+        loadSecurityData();
+        setActionSuccess('Conta atualizada com sucesso!');
+        setTimeout(() => setActionSuccess(null), 3000);
+      } else {
+        setActionError(data.error || 'Erro ao atualizar usuário.');
       }
     } catch (err) {
-      console.error('Erro ao criar usuário:', err);
+      setActionError('Erro de conexão ao atualizar usuário.');
     }
   };
 
@@ -137,6 +219,14 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
           </button>
         </div>
 
+        {/* Global Feedback notification */}
+        {actionSuccess && (
+          <div className="bg-emerald-500/20 border-b border-emerald-500/30 text-emerald-300 px-6 py-2 text-xs flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>{actionSuccess}</span>
+          </div>
+        )}
+
         {/* Content Body */}
         <div className="flex-1 overflow-y-auto p-6 bg-slate-950/50">
           
@@ -168,7 +258,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
                     <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold">Zero Credenciais na IA</span>
                   </div>
                   <p className="text-sm text-white font-semibold">Isolamento Estrito</p>
-                  <p className="text-xs text-slate-400 mt-1">Senhas e hashes nunca passam por modelos Gemini ou Groq.</p>
+                  <p className="text-xs text-slate-400 mt-1">Senhas e hashes nunca passam por modelos externos.</p>
                 </div>
               </div>
 
@@ -205,12 +295,15 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-bold text-white">Gerenciamento de Contas e Permissões</h3>
-                  <p className="text-xs text-slate-400">Controle de acesso baseado em papéis (RBAC)</p>
+                  <p className="text-xs text-slate-400">Controle de acesso baseado em papéis (RBAC) e edição de credenciais</p>
                 </div>
                 {isAdmin && (
                   <button
-                    onClick={() => setShowNewUserModal(true)}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-2 transition"
+                    onClick={() => {
+                      setActionError(null);
+                      setShowNewUserModal(true);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-2 transition shadow-lg shadow-emerald-900/20"
                   >
                     <Plus className="w-4 h-4" />
                     Novo Usuário
@@ -227,16 +320,16 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
                       <th className="py-3 px-4">Papel (RBAC)</th>
                       <th className="py-3 px-4">Status</th>
                       <th className="py-3 px-4">Último Login</th>
-                      {isAdmin && <th className="py-3 px-4 text-right">Ações</th>}
+                      {isAdmin && <th className="py-3 px-4 text-right">Ações de Gestão</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 text-xs">
                     {users.map(u => (
                       <tr key={u.id} className="hover:bg-slate-800/40 transition">
-                        <td className="py-3 px-4 text-white font-medium">{u.username}</td>
+                        <td className="py-3 px-4 text-white font-medium font-mono">{u.username}</td>
                         <td className="py-3 px-4 text-slate-300">{u.name}</td>
                         <td className="py-3 px-4">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                             u.role === 'ADMIN' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30' :
                             u.role === 'OPERATOR' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30' :
                             'bg-slate-800 text-slate-300'
@@ -245,7 +338,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
                           </span>
                         </td>
                         <td className="py-3 px-4">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                             u.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
                           }`}>
                             {u.status}
@@ -255,16 +348,30 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
                           {u.lastLogin ? new Date(u.lastLogin).toLocaleString() : 'Nunca'}
                         </td>
                         {isAdmin && (
-                          <td className="py-3 px-4 text-right">
+                          <td className="py-3 px-4 text-right space-x-2">
+                            <button
+                              onClick={() => handleOpenEdit(u)}
+                              className="px-2.5 py-1 rounded-lg bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 text-[10px] font-medium transition inline-flex items-center gap-1"
+                            >
+                              <Edit2 className="w-3 h-3" /> Editar / Senha
+                            </button>
                             {u.username !== 'admin' && (
-                              <button
-                                onClick={() => handleToggleLock(u.id)}
-                                className={`px-3 py-1 rounded-lg text-[10px] font-medium transition ${
-                                  u.status === 'active' ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                                }`}
-                              >
-                                {u.status === 'active' ? 'Bloquear' : 'Desbloquear'}
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleToggleLock(u.id)}
+                                  className={`px-2.5 py-1 rounded-lg text-[10px] font-medium transition ${
+                                    u.status === 'active' ? 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20' : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                                  }`}
+                                >
+                                  {u.status === 'active' ? 'Bloquear' : 'Desbloquear'}
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteUser(u.id, u.username)}
+                                  className="px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 text-[10px] font-medium transition inline-flex items-center gap-1"
+                                >
+                                  <Trash2 className="w-3 h-3" /> Excluir
+                                </button>
+                              </>
                             )}
                           </td>
                         )}
@@ -327,15 +434,23 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
               <Users className="w-4 h-4 text-emerald-400" />
               Cadastrar Novo Usuário
             </h3>
+
+            {actionError && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{actionError}</span>
+              </div>
+            )}
+
             <form onSubmit={handleCreateUser} className="space-y-3">
               <div>
-                <label className="text-[11px] text-slate-400 block mb-1">Nome de Usuário (Login)</label>
+                <label className="text-[11px] text-slate-400 block mb-1">Nome de Usuário (Login)*</label>
                 <input
                   type="text"
                   required
                   value={newUsername}
                   onChange={e => setNewUsername(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-emerald-500"
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-emerald-500 font-mono"
                   placeholder="ex: analista"
                 />
               </div>
@@ -345,7 +460,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
                   type="text"
                   value={newName}
                   onChange={e => setNewName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-emerald-500"
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-emerald-500"
                   placeholder="ex: Ana Souza"
                 />
               </div>
@@ -355,19 +470,19 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
                   type="email"
                   value={newEmail}
                   onChange={e => setNewEmail(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-emerald-500"
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-emerald-500"
                   placeholder="ex: ana@hubdeias.local"
                 />
               </div>
               <div>
-                <label className="text-[11px] text-slate-400 block mb-1">Senha Provisória</label>
+                <label className="text-[11px] text-slate-400 block mb-1">Senha Inicial*</label>
                 <input
                   type="password"
                   required
                   value={newPassword}
                   onChange={e => setNewPassword(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-emerald-500"
-                  placeholder="••••••••"
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-emerald-500"
+                  placeholder="••••••••••••"
                 />
               </div>
               <div>
@@ -375,7 +490,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
                 <select
                   value={newRole}
                   onChange={e => setNewRole(e.target.value as any)}
-                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-emerald-500"
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-emerald-500"
                 >
                   <option value="USER">Usuário (USER)</option>
                   <option value="OPERATOR">Operador (OPERATOR)</option>
@@ -387,15 +502,93 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
                 <button
                   type="button"
                   onClick={() => setShowNewUserModal(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs hover:bg-slate-700 transition"
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs hover:bg-slate-700 transition"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs hover:bg-emerald-500 font-medium transition"
+                  className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs hover:bg-emerald-500 font-medium transition shadow-lg shadow-emerald-900/20"
                 >
-                  Salvar Usuário
+                  Criar Usuário
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar Usuário / Redefinir Senha */}
+      {editingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl space-y-4">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Edit2 className="w-4 h-4 text-blue-400" />
+              Editar Conta: <span className="font-mono text-emerald-400">{editingUser.username}</span>
+            </h3>
+
+            {actionError && (
+              <div className="p-3 bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs rounded-xl flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{actionError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateUser} className="space-y-3">
+              <div>
+                <label className="text-[11px] text-slate-400 block mb-1">Nome Completo</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-slate-400 block mb-1">E-mail</label>
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={e => setEditEmail(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-slate-400 block mb-1">Perfil (RBAC)</label>
+                <select
+                  value={editRole}
+                  onChange={e => setEditRole(e.target.value as any)}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-blue-500"
+                >
+                  <option value="USER">Usuário (USER)</option>
+                  <option value="OPERATOR">Operador (OPERATOR)</option>
+                  <option value="ADMIN">Administrador (ADMIN)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-[11px] text-slate-400 block mb-1">Nova Senha (Opcional — deixar em branco para manter a atual)</label>
+                <input
+                  type="password"
+                  value={editPassword}
+                  onChange={e => setEditPassword(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-blue-500"
+                  placeholder="Nova senha segura..."
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs hover:bg-slate-700 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-xs hover:bg-blue-500 font-medium transition shadow-lg shadow-blue-900/20"
+                >
+                  Salvar Alterações
                 </button>
               </div>
             </form>
