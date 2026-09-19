@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { authenticateUser, authenticateWithPasskey, getUserPasskeys } from '../../services/authService';
+import { authenticateUser } from '../../services/authService';
 import { Shield, Lock, User, KeyRound, Fingerprint, AlertTriangle, CheckCircle2, Sparkles, RefreshCw } from 'lucide-react';
 import { AuthSession } from '../../types';
 
@@ -14,7 +14,7 @@ interface Message {
 }
 
 export const GuardiaoLoginModal: React.FC<GuardiaoLoginModalProps> = ({ onLoginSuccess }) => {
-  const [step, setStep] = useState<'username' | 'password' | 'traditional' | 'success'>('username');
+  const [step, setStep] = useState<'username' | 'password' | 'success'>('username');
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -24,10 +24,9 @@ export const GuardiaoLoginModal: React.FC<GuardiaoLoginModalProps> = ({ onLoginS
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Saudação inicial do Guardião
     const initialMsg: Message = {
       sender: 'guardiao',
-      text: 'Olá. Eu sou o Guardião de Segurança do Hub de IAs. Para continuar com a entrada segura, informe seu nome de usuário ou e-mail:',
+      text: 'Olá. Eu sou o Guardião de Segurança do Hub de IAs. Informe seu usuário ou clique em um acesso rápido abaixo:',
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
     setMessages([initialMsg]);
@@ -44,6 +43,12 @@ export const GuardiaoLoginModal: React.FC<GuardiaoLoginModalProps> = ({ onLoginS
     ]);
   };
 
+  const handleQuickFill = (user: string, pass: string) => {
+    setUsernameInput(user);
+    setPasswordInput(pass);
+    setUseTraditional(true);
+  };
+
   const handleUserSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!usernameInput.trim()) return;
@@ -55,16 +60,14 @@ export const GuardiaoLoginModal: React.FC<GuardiaoLoginModalProps> = ({ onLoginS
 
     setTimeout(() => {
       setLoading(false);
-      // Validação anti-prompt injection simulada
       const lower = typedUser.toLowerCase();
       if (lower.includes('ignore') || lower.includes('bypass') || lower.includes('desative')) {
-        addMessage('guardiao', 'Detectei uma tentativa de manipulação de regras. Para sua segurança, as políticas de acesso são invioláveis. Por favor, informe um usuário válido.');
+        addMessage('guardiao', 'Detectei tentativa de manipulação de regras. Acesso negado.');
         return;
       }
-
-      addMessage('guardiao', `Identidade recebida. Agora, por favor, informe sua senha de acesso ou utilize autenticação biométrica (Passkey).`);
+      addMessage('guardiao', `Identidade recebida (${typedUser}). Agora, por favor, informe sua senha de acesso.`);
       setStep('password');
-    }, 600);
+    }, 400);
   };
 
   const handlePasswordSubmit = async (e?: React.FormEvent) => {
@@ -80,46 +83,20 @@ export const GuardiaoLoginModal: React.FC<GuardiaoLoginModalProps> = ({ onLoginS
       setLoading(false);
 
       if (res.success && res.session) {
-        addMessage('guardiao', 'Identidade confirmada com sucesso pelo Motor de Segurança. Acesso autorizado. Bem-vindo ao Hub de IAs.');
+        addMessage('guardiao', 'Identidade confirmada com sucesso pelo Motor de Segurança. Bem-vindo ao Hub de IAs.');
         setStep('success');
         setTimeout(() => {
           onLoginSuccess(res.session!);
-        }, 1000);
+        }, 800);
       } else {
         const errText = res.error || 'Credenciais inválidas.';
         setErrorMsg(errText);
-        addMessage('guardiao', `Aviso de Segurança: ${errText} Por favor, tente novamente.`);
+        addMessage('guardiao', `Aviso de Segurança: ${errText} Tente novamente.`);
         setPasswordInput('');
       }
     } catch (err: any) {
       setLoading(false);
-      setErrorMsg('Erro de comunicação com o motor.');
-    }
-  };
-
-  const handlePasskeyLogin = async () => {
-    if (!usernameInput.trim()) {
-      setErrorMsg('Informe seu usuário primeiro para autenticar com Passkey.');
-      return;
-    }
-    setLoading(true);
-    setErrorMsg(null);
-    addMessage('user', '[Solicitando Autenticação Biométrica / Passkey]');
-
-    try {
-      const res = await authenticateWithPasskey(usernameInput);
-      setLoading(false);
-      if (res.success && res.session) {
-        addMessage('guardiao', 'Biometria validada com sucesso pelo dispositivo. Acesso autorizado!');
-        setStep('success');
-        setTimeout(() => onLoginSuccess(res.session!), 1000);
-      } else {
-        setErrorMsg(res.error || 'Falha na autenticação Passkey.');
-        addMessage('guardiao', `Falha biométrica: ${res.error || 'Dispositivo não reconhecido'}.`);
-      }
-    } catch (err: any) {
-      setLoading(false);
-      setErrorMsg('Erro no fluxo Passkey.');
+      setErrorMsg('Erro de comunicação com o servidor.');
     }
   };
 
@@ -127,25 +104,50 @@ export const GuardiaoLoginModal: React.FC<GuardiaoLoginModalProps> = ({ onLoginS
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4">
       <div className="w-full max-w-xl bg-slate-900 border border-emerald-500/30 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
-        {/* Header do Guardião */}
+        {/* Header */}
         <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 px-6 py-4 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-inner">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
               <Shield className="w-6 h-6 animate-pulse" />
             </div>
             <div>
               <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 Guardião de Segurança <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">Ativo</span>
               </h2>
-              <p className="text-xs text-slate-400">Central de Identidade & Autenticação Determinística</p>
+              <p className="text-xs text-slate-400">Central de Identidade & Autenticação Server-Side</p>
             </div>
           </div>
           <button
             onClick={() => setUseTraditional(!useTraditional)}
             className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition"
           >
-            {useTraditional ? 'Modo Guardião IA' : 'Login Tradicional'}
+            {useTraditional ? 'Modo Guardião IA' : 'Login Direto / Acesso'}
           </button>
+        </div>
+
+        {/* Quick Access Demo Bar */}
+        <div className="bg-slate-950 px-6 py-2.5 border-b border-slate-800 flex items-center justify-between flex-wrap gap-2 text-xs">
+          <span className="text-slate-400 font-medium">Acesso Rápido (Demo):</span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleQuickFill('admin', 'Admin@Hub2026!')}
+              className="px-2.5 py-1 rounded-lg bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-600/30 transition font-mono"
+            >
+              Admin
+            </button>
+            <button
+              onClick={() => handleQuickFill('operador', 'Operador@2026!')}
+              className="px-2.5 py-1 rounded-lg bg-blue-600/20 text-blue-300 border border-blue-500/30 hover:bg-blue-600/30 transition font-mono"
+            >
+              Operador
+            </button>
+            <button
+              onClick={() => handleQuickFill('usuario', 'User@2026!')}
+              className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 transition font-mono"
+            >
+              Usuário
+            </button>
+          </div>
         </div>
 
         {!useTraditional ? (
@@ -173,14 +175,13 @@ export const GuardiaoLoginModal: React.FC<GuardiaoLoginModalProps> = ({ onLoginS
                 <div className="flex justify-start">
                   <div className="bg-slate-800 border border-slate-700 rounded-2xl rounded-bl-none px-4 py-3 text-slate-400 flex items-center space-x-2">
                     <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />
-                    <span className="text-xs">Guardião processando e validando segurança...</span>
+                    <span className="text-xs">Validando com o motor server-side...</span>
                   </div>
                 </div>
               )}
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Error banner se houver */}
             {errorMsg && (
               <div className="px-6 py-2 bg-rose-500/10 border-t border-rose-500/20 text-rose-300 text-xs flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
@@ -198,7 +199,7 @@ export const GuardiaoLoginModal: React.FC<GuardiaoLoginModalProps> = ({ onLoginS
                       type="text"
                       value={usernameInput}
                       onChange={e => setUsernameInput(e.target.value)}
-                      placeholder="Ex: admin ou operador"
+                      placeholder="Ex: admin, operador ou usuario"
                       className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition"
                       autoFocus
                     />
@@ -236,17 +237,11 @@ export const GuardiaoLoginModal: React.FC<GuardiaoLoginModalProps> = ({ onLoginS
                     </button>
                   </div>
                   <div className="flex items-center justify-between text-xs pt-1">
-                    <button
-                      type="button"
-                      onClick={handlePasskeyLogin}
-                      className="text-emerald-400 hover:underline flex items-center gap-1.5"
-                    >
-                      <Fingerprint className="w-4 h-4" /> Entrar com Passkey / Biometria
-                    </button>
+                    <span className="text-slate-400">Usuário: <strong className="text-white">{usernameInput}</strong></span>
                     <button
                       type="button"
                       onClick={() => setStep('username')}
-                      className="text-slate-400 hover:underline"
+                      className="text-emerald-400 hover:underline"
                     >
                       Alterar usuário
                     </button>
@@ -262,11 +257,11 @@ export const GuardiaoLoginModal: React.FC<GuardiaoLoginModalProps> = ({ onLoginS
             </div>
           </>
         ) : (
-          /* Modo de Login Tradicional (Fallback) */
+          /* Modo de Login Direto / Tradicional */
           <div className="p-6 space-y-4 bg-slate-950/55 flex-1 overflow-y-auto">
-            <div className="text-center mb-6">
-              <h3 className="text-white font-bold text-base">Central de Acesso Tradicional</h3>
-              <p className="text-xs text-slate-400">Fallback ativo — Acesso direto por credenciais</p>
+            <div className="text-center mb-4">
+              <h3 className="text-white font-bold text-base">Acesso Direto ao Sistema</h3>
+              <p className="text-xs text-slate-400">Insira suas credenciais ou use os botões de acesso rápido acima</p>
             </div>
 
             {errorMsg && (
@@ -325,8 +320,8 @@ export const GuardiaoLoginModal: React.FC<GuardiaoLoginModalProps> = ({ onLoginS
 
         {/* Rodapé informativo */}
         <div className="px-6 py-3 bg-slate-950 border-t border-slate-800 text-[11px] text-slate-500 flex items-center justify-between">
-          <span>Credenciais padrão: <code>admin</code> / <code>Admin@Hub2026!</code></span>
-          <span className="flex items-center gap-1 text-emerald-400/80"><Sparkles className="w-3 h-3" /> Seguro & Criptografado</span>
+          <span>Contas padrão: <code>admin</code> / <code>operador</code> / <code>usuario</code></span>
+          <span className="flex items-center gap-1 text-emerald-400/80"><Sparkles className="w-3 h-3" /> Servidor Seguro PBKDF2</span>
         </div>
 
       </div>
