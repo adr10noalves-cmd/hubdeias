@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { getAllUsers, saveAllUsers, getSecurityEvents } from '../../services/authService';
+import React, { useState, useEffect } from 'react';
 import { UserAccount, SecurityEvent, AuthSession } from '../../types';
 import { Shield, Users, Activity, Lock, Unlock, Key, Trash2, Plus, AlertCircle, CheckCircle2, X, Terminal, Server } from 'lucide-react';
 
@@ -10,8 +9,8 @@ interface SecurityCenterModalProps {
 
 export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ currentUser, onClose }) => {
   const [activeTab, setActiveTab] = useState<'events' | 'users' | 'status'>('status');
-  const [users, setUsers] = useState<UserAccount[]>(getAllUsers());
-  const [events, setEvents] = useState<SecurityEvent[]>(getSecurityEvents());
+  const [users, setUsers] = useState<UserAccount[]>([]);
+  const [events, setEvents] = useState<SecurityEvent[]>([]);
   const [showNewUserModal, setShowNewUserModal] = useState(false);
 
   // Form novo usuário
@@ -23,49 +22,65 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
 
   const isAdmin = currentUser.role === 'ADMIN';
 
-  const handleToggleLock = (userId: string) => {
-    if (!isAdmin) return;
-    const updated = users.map(u => {
-      if (u.id === userId) {
-        const newStatus = u.status === 'locked' || u.status === 'suspended' ? 'active' : 'locked';
-        return { ...u, status: newStatus, failedAttempts: 0, lockedUntil: null };
+  useEffect(() => {
+    loadSecurityData();
+  }, []);
+
+  const loadSecurityData = async () => {
+    try {
+      const uRes = await fetch('/api/auth/users');
+      if (uRes.ok) {
+        setUsers(await uRes.json());
       }
-      return u;
-    });
-    setUsers(updated);
-    saveAllUsers(updated);
+      const eRes = await fetch('/api/auth/events');
+      if (eRes.ok) {
+        setEvents(await eRes.json());
+      }
+    } catch (err) {
+      console.error('Erro ao carregar dados de segurança:', err);
+    }
+  };
+
+  const handleToggleLock = async (userId: string) => {
+    if (!isAdmin) return;
+    try {
+      const res = await fetch(`/api/auth/users/${userId}`, { method: 'PATCH' });
+      if (res.ok) {
+        loadSecurityData();
+      }
+    } catch (err) {
+      console.error('Erro ao alterar status do usuário:', err);
+    }
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isAdmin || !newUsername || !newPassword) return;
 
-    // Gerar hash simples
-    const msgUint8 = new TextEncoder().encode(newPassword + 'hub-de-ias-salt-2026');
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
-    const passwordHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    try {
+      const res = await fetch('/api/auth/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: newUsername,
+          name: newName,
+          email: newEmail,
+          password: newPassword,
+          role: newRole,
+        }),
+      });
 
-    const newUser: UserAccount = {
-      id: 'usr_' + Math.random().toString(36).substring(2, 9),
-      username: newUsername.trim(),
-      name: newName.trim() || newUsername,
-      email: newEmail.trim() || `${newUsername}@hubdeias.local`,
-      role: newRole,
-      status: 'active',
-      passwordHash,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      failedAttempts: 0,
-    };
-
-    const updated = [...users, newUser];
-    setUsers(updated);
-    saveAllUsers(updated);
-    setShowNewUserModal(false);
-    setNewUsername('');
-    setNewName('');
-    setNewEmail('');
-    setNewPassword('');
+      if (res.ok) {
+        setShowNewUserModal(false);
+        setNewUsername('');
+        setNewName('');
+        setNewEmail('');
+        setNewPassword('');
+        loadSecurityData();
+      }
+    } catch (err) {
+      console.error('Erro ao criar usuário:', err);
+    }
   };
 
   return (
@@ -80,7 +95,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
             </div>
             <div>
               <h2 className="text-lg font-bold text-white">Central de Segurança & Painel do Guardião</h2>
-              <p className="text-xs text-slate-400">Auditoria, Identidade, Controle de Acesso e Contas</p>
+              <p className="text-xs text-slate-400">Auditoria, Identidade, Controle de Acesso e Contas Server-Side</p>
             </div>
           </div>
           <button
@@ -99,7 +114,8 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
               activeTab === 'status' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Activity className="w-4 h-4" /> Visão Geral & Sessão
+            <Server className="w-4 h-4" />
+            Status do Servidor & Sockets
           </button>
           <button
             onClick={() => setActiveTab('users')}
@@ -107,7 +123,8 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
               activeTab === 'users' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Users className="w-4 h-4" /> Gerenciamento de Usuários ({users.length})
+            <Users className="w-4 h-4" />
+            Contas & Permissões ({users.length})
           </button>
           <button
             onClick={() => setActiveTab('events')}
@@ -115,112 +132,142 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
               activeTab === 'events' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Terminal className="w-4 h-4" /> Logs de Auditoria ({events.length})
+            <Activity className="w-4 h-4" />
+            Logs de Auditoria ({events.length})
           </button>
         </div>
 
-        {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-6 bg-slate-950/60">
+        {/* Content Body */}
+        <div className="flex-1 overflow-y-auto p-6 bg-slate-950/50">
           
+          {/* TAB 1: STATUS DO SISTEMA */}
           {activeTab === 'status' && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Usuário Atual</span>
-                  <p className="text-xl font-bold text-white mt-1">{currentUser.username}</p>
-                  <span className="inline-block mt-2 px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-400 text-xs font-mono">
-                    Cargo: {currentUser.role}
-                  </span>
-                </div>
-                <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Sessão Segura</span>
-                  <p className="text-sm font-mono text-emerald-300 mt-2 truncate">ID: {currentUser.id}</p>
-                  <p className="text-xs text-slate-400 mt-1">Expira em: {new Date(currentUser.expiresAt).toLocaleTimeString()}</p>
-                </div>
-                <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800">
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Status do Sistema</span>
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span className="text-sm text-emerald-300 font-medium">Motor de Segurança Ativo</span>
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs text-slate-400 font-medium uppercase">Motor de Criptografia</span>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold">PBKDF2 SHA-512</span>
                   </div>
-                  <p className="text-xs text-slate-400 mt-1">Proteção contra tentativas & Passkeys</p>
+                  <p className="text-sm text-white font-semibold">Salt Individual por Usuário</p>
+                  <p className="text-xs text-slate-400 mt-1">Derivação de chave de alta segurança server-side.</p>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs text-slate-400 font-medium uppercase">Sessões & Autoridade</span>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold">Server-Side Session</span>
+                  </div>
+                  <p className="text-sm text-white font-semibold">Isolamento Completo</p>
+                  <p className="text-xs text-slate-400 mt-1">Sessões geridas com expiração e revogação no servidor.</p>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs text-slate-400 font-medium uppercase">Proteção Guardião & IA</span>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-bold">Zero Credenciais na IA</span>
+                  </div>
+                  <p className="text-sm text-white font-semibold">Isolamento Estrito</p>
+                  <p className="text-xs text-slate-400 mt-1">Senhas e hashes nunca passam por modelos Gemini ou Groq.</p>
                 </div>
               </div>
 
-              <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800">
-                <h3 className="text-white font-bold text-sm mb-3">Diretrizes de Segurança Vigentes</h3>
-                <ul className="space-y-2 text-xs text-slate-300">
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Isolamento estrito entre IA conversacional e motor de segurança determinístico.</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Bloqueio progressivo ativado (3 falhas = 5 min, 5 falhas = 30 min).</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Senhas nunca são armazenadas em texto puro nem enviadas para modelos de IA.</li>
-                  <li className="flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-400" /> Suporte a Passkey / WebAuthn para autenticação biométrica em dispositivos compatíveis.</li>
-                </ul>
+              <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-emerald-400" />
+                  Sua Sessão Atual
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                  <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/80">
+                    <span className="text-slate-400 block mb-1">Usuário</span>
+                    <span className="text-white font-bold">{currentUser.username}</span>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/80">
+                    <span className="text-slate-400 block mb-1">Perfil (RBAC)</span>
+                    <span className="text-emerald-400 font-bold">{currentUser.role}</span>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/80">
+                    <span className="text-slate-400 block mb-1">ID da Sessão</span>
+                    <span className="text-slate-300 font-mono">{currentUser.id}</span>
+                  </div>
+                  <div className="bg-slate-950 p-3 rounded-lg border border-slate-800/80">
+                    <span className="text-slate-400 block mb-1">Expiração</span>
+                    <span className="text-slate-300">{new Date(currentUser.expiresAt).toLocaleTimeString()}</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
+          {/* TAB 2: CONTAS DE USUÁRIO */}
           {activeTab === 'users' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-white font-bold text-sm">Usuários Cadastrados</h3>
-                  <p className="text-xs text-slate-400">Gerencie contas, redefina estados e configure permissões</p>
+                  <h3 className="text-sm font-bold text-white">Gerenciamento de Contas e Permissões</h3>
+                  <p className="text-xs text-slate-400">Controle de acesso baseado em papéis (RBAC)</p>
                 </div>
                 {isAdmin && (
                   <button
                     onClick={() => setShowNewUserModal(true)}
-                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-xl flex items-center gap-2 transition"
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-2 transition"
                   >
-                    <Plus className="w-4 h-4" /> Novo Usuário
+                    <Plus className="w-4 h-4" />
+                    Novo Usuário
                   </button>
                 )}
               </div>
 
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+              <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-slate-800 text-slate-400 text-[11px] uppercase tracking-wider">
-                      <th className="p-4">Usuário</th>
-                      <th className="p-4">Nome</th>
-                      <th className="p-4">Nível</th>
-                      <th className="p-4">Status</th>
-                      <th className="p-4">Falhas</th>
-                      <th className="p-4 text-right">Ações</th>
+                    <tr className="border-b border-slate-800 bg-slate-950 text-[11px] text-slate-400 uppercase tracking-wider">
+                      <th className="py-3 px-4">Usuário</th>
+                      <th className="py-3 px-4">Nome</th>
+                      <th className="py-3 px-4">Papel (RBAC)</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4">Último Login</th>
+                      {isAdmin && <th className="py-3 px-4 text-right">Ações</th>}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-800 text-xs text-slate-200">
+                  <tbody className="divide-y divide-slate-800/60 text-xs">
                     {users.map(u => (
-                      <tr key={u.id} className="hover:bg-slate-800/50 transition">
-                        <td className="p-4 font-mono font-medium text-emerald-400">{u.username}</td>
-                        <td className="p-4">{u.name}</td>
-                        <td className="p-4">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-semibold ${
-                            u.role === 'ADMIN' ? 'bg-purple-500/20 text-purple-300' :
-                            u.role === 'OPERATOR' ? 'bg-blue-500/20 text-blue-300' : 'bg-slate-800 text-slate-300'
+                      <tr key={u.id} className="hover:bg-slate-800/40 transition">
+                        <td className="py-3 px-4 text-white font-medium">{u.username}</td>
+                        <td className="py-3 px-4 text-slate-300">{u.name}</td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            u.role === 'ADMIN' ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30' :
+                            u.role === 'OPERATOR' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30' :
+                            'bg-slate-800 text-slate-300'
                           }`}>
                             {u.role}
                           </span>
                         </td>
-                        <td className="p-4">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${
-                            u.status === 'active' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            u.status === 'active' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
                           }`}>
                             {u.status}
                           </span>
                         </td>
-                        <td className="p-4 font-mono">{u.failedAttempts}</td>
-                        <td className="p-4 text-right">
-                          {isAdmin && u.username !== 'admin' && (
-                            <button
-                              onClick={() => handleToggleLock(u.id)}
-                              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                                u.status === 'locked' ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-amber-600/20 hover:bg-amber-600/30 text-amber-300'
-                              }`}
-                            >
-                              {u.status === 'locked' ? 'Desbloquear' : 'Bloquear'}
-                            </button>
-                          )}
+                        <td className="py-3 px-4 text-slate-400">
+                          {u.lastLogin ? new Date(u.lastLogin).toLocaleString() : 'Nunca'}
                         </td>
+                        {isAdmin && (
+                          <td className="py-3 px-4 text-right">
+                            {u.username !== 'admin' && (
+                              <button
+                                onClick={() => handleToggleLock(u.id)}
+                                className={`px-3 py-1 rounded-lg text-[10px] font-medium transition ${
+                                  u.status === 'active' ? 'bg-rose-500/10 text-rose-400 hover:bg-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                                }`}
+                              >
+                                {u.status === 'active' ? 'Bloquear' : 'Desbloquear'}
+                              </button>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -229,98 +276,110 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
             </div>
           )}
 
+          {/* TAB 3: LOGS DE AUDITORIA */}
           {activeTab === 'events' && (
             <div className="space-y-4">
               <div>
-                <h3 className="text-white font-bold text-sm">Registro de Eventos de Segurança (Auditoria)</h3>
-                <p className="text-xs text-slate-400">Histórico em tempo real de autenticações, bloqueios e acessos</p>
+                <h3 className="text-sm font-bold text-white">Registro de Auditoria de Segurança</h3>
+                <p className="text-xs text-slate-400">Eventos de autenticação, bloqueios e alterações registrados no servidor</p>
               </div>
 
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden font-mono text-xs">
-                <div className="max-h-[50vh] overflow-y-auto divide-y divide-slate-800/60">
-                  {events.length === 0 ? (
-                    <div className="p-6 text-center text-slate-500">Nenhum evento registrado até o momento.</div>
-                  ) : (
-                    events.map(ev => (
-                      <div key={ev.id} className="p-3.5 flex items-start justify-between gap-4 hover:bg-slate-800/40 transition">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              ev.severity === 'danger' ? 'bg-rose-500/20 text-rose-400' :
-                              ev.severity === 'warn' ? 'bg-amber-500/20 text-amber-400' : 'bg-emerald-500/20 text-emerald-400'
-                            }`}>
-                              {ev.event}
-                            </span>
-                            <span className="text-slate-300 font-semibold">{ev.username}</span>
-                          </div>
-                          <p className="text-[11px] text-slate-400 font-sans">{ev.metadata}</p>
+              <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden divide-y divide-slate-800">
+                {events.length === 0 ? (
+                  <div className="p-8 text-center text-slate-500 text-xs">Nenhum evento registrado.</div>
+                ) : (
+                  events.map(evt => (
+                    <div key={evt.id} className="p-4 flex items-start justify-between gap-4 hover:bg-slate-800/30 transition">
+                      <div className="flex items-start space-x-3">
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                          evt.severity === 'danger' ? 'bg-rose-500/10 text-rose-400' :
+                          evt.severity === 'warn' ? 'bg-amber-500/10 text-amber-400' :
+                          'bg-emerald-500/10 text-emerald-400'
+                        }`}>
+                          {evt.severity === 'danger' ? <AlertCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
                         </div>
-                        <div className="text-right shrink-0 text-[10px] text-slate-500">
-                          {new Date(ev.timestamp).toLocaleString()}
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-white">{evt.event}</span>
+                            <span className="text-[10px] text-slate-400 bg-slate-950 px-2 py-0.5 rounded font-mono">{evt.username}</span>
+                          </div>
+                          <p className="text-xs text-slate-300 mt-1">{evt.metadata}</p>
                         </div>
                       </div>
-                    ))
-                  )}
-                </div>
+                      <span className="text-[10px] text-slate-500 font-mono shrink-0">
+                        {new Date(evt.timestamp).toLocaleString()}
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
 
         </div>
-
       </div>
 
       {/* Modal Novo Usuário */}
       {showNewUserModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/90 p-4">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl">
-            <h3 className="text-white font-bold text-base mb-1">Cadastrar Novo Usuário</h3>
-            <p className="text-xs text-slate-400 mb-4">Insira as credenciais iniciais para o novo perfil.</p>
-            
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-6 shadow-2xl space-y-4">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Users className="w-4 h-4 text-emerald-400" />
+              Cadastrar Novo Usuário
+            </h3>
             <form onSubmit={handleCreateUser} className="space-y-3">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Nome de Usuário</label>
+                <label className="text-[11px] text-slate-400 block mb-1">Nome de Usuário (Login)</label>
                 <input
                   type="text"
+                  required
                   value={newUsername}
                   onChange={e => setNewUsername(e.target.value)}
-                  placeholder="ex: ana.silva"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white"
-                  required
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-emerald-500"
+                  placeholder="ex: analista"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Nome Completo</label>
+                <label className="text-[11px] text-slate-400 block mb-1">Nome Completo</label>
                 <input
                   type="text"
                   value={newName}
                   onChange={e => setNewName(e.target.value)}
-                  placeholder="ex: Ana Silva"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-emerald-500"
+                  placeholder="ex: Ana Souza"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Senha Inicial</label>
+                <label className="text-[11px] text-slate-400 block mb-1">E-mail</label>
+                <input
+                  type="email"
+                  value={newEmail}
+                  onChange={e => setNewEmail(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-emerald-500"
+                  placeholder="ex: ana@hubdeias.local"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-slate-400 block mb-1">Senha Provisória</label>
                 <input
                   type="password"
+                  required
                   value={newPassword}
                   onChange={e => setNewPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white"
-                  required
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-emerald-500"
+                  placeholder="••••••••"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Nível de Acesso</label>
+                <label className="text-[11px] text-slate-400 block mb-1">Perfil (RBAC)</label>
                 <select
                   value={newRole}
                   onChange={e => setNewRole(e.target.value as any)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white"
+                  className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-emerald-500"
                 >
                   <option value="USER">Usuário (USER)</option>
                   <option value="OPERATOR">Operador (OPERATOR)</option>
                   <option value="ADMIN">Administrador (ADMIN)</option>
-                  <option value="GUEST">Convidado (GUEST)</option>
                 </select>
               </div>
 
@@ -328,15 +387,15 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
                 <button
                   type="button"
                   onClick={() => setShowNewUserModal(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs rounded-xl transition"
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs hover:bg-slate-700 transition"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-xl transition"
+                  className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs hover:bg-emerald-500 font-medium transition"
                 >
-                  Criar Usuário
+                  Salvar Usuário
                 </button>
               </div>
             </form>
