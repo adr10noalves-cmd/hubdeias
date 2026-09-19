@@ -226,7 +226,6 @@ export async function executeGemini(params: {
 
       if (errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')) {
         lastHttpStatus = 429;
-        break; // Cota esgotada: abortar tentativas em outros modelos e acionar fallback imediato
       } else if (errMsg.includes('401') || errMsg.includes('403') || errMsg.includes('API_KEY_INVALID')) {
         lastHttpStatus = 401;
         break; // Chave inválida não adianta tentar outros modelos Gemini
