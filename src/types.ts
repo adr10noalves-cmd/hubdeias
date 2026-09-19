@@ -603,5 +603,76 @@ export interface ProjectHubItem {
   history: ProjectHistoryItem[];
 }
 
+// --- TIPOS DE AUTENTICAÇÃO E SEGURANÇA (GUARDIÃO & CENTRAL DE SEGURANÇA) ---
+
+export type UserRole = 'ADMIN' | 'OPERATOR' | 'USER' | 'GUEST';
+
+export type UserStatus = 'active' | 'suspended' | 'locked';
+
+export interface UserAccount {
+  id: string;
+  username: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+  passwordHash: string; // Armazenado com salt/hash seguro
+  createdAt: string;
+  updatedAt: string;
+  lastLogin?: string;
+  lockedUntil?: string | null;
+  failedAttempts: number;
+}
+
+export type SecurityEventType =
+  | 'LOGIN_SUCESSO'
+  | 'LOGIN_FALHA'
+  | 'CONTA_BLOQUEADA'
+  | 'CONTA_DESBLOQUEADA'
+  | 'LOGOUT'
+  | 'PASSKEY_CRIADA'
+  | 'PASSKEY_REMOVIDA'
+  | 'SESSAO_REVOGADA'
+  | 'ACESSO_NEGADO'
+  | 'ACESSO_ADMINISTRATIVO'
+  | 'ALTERACAO_DE_SENHA'
+  | 'USUARIO_CRIADO'
+  | 'USUARIO_DESATIVADO';
+
+export interface SecurityEvent {
+  id: string;
+  userId?: string;
+  username: string;
+  event: SecurityEventType;
+  severity: 'info' | 'warn' | 'danger';
+  metadata: string;
+  timestamp: string;
+  ip?: string;
+  device?: string;
+}
+
+export interface AuthSession {
+  id: string;
+  userId: string;
+  username: string;
+  role: UserRole;
+  createdAt: string;
+  expiresAt: string;
+  revokedAt?: string | null;
+  device: string;
+}
+
+export interface PasskeyCredential {
+  id: string;
+  userId: string;
+  credentialId: string;
+  publicKey: string;
+  counter: number;
+  deviceName: string;
+  createdAt: string;
+  revokedAt?: string | null;
+}
+
+
 
 

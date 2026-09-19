@@ -18,7 +18,7 @@ import { StrategicMotorModal } from './components/StrategicMotorModal';
 import { CentralDeIAModal } from './components/CentralDeIAModal';
 import { CentralAICoordinator } from './components/CentralAICoordinator';
 import { categoryIcons, resolveIADetails } from './utils/helpers';
-import { Layers, Sparkles } from 'lucide-react';
+import { Layers, Sparkles, Shield } from 'lucide-react';
 import {
   getIAsFromFirestore,
   saveIAToFirestore,
@@ -47,10 +47,17 @@ import {
   saveIdeaToFirestore,
   deleteIdeaFromFirestore,
 } from './services/strategicMemoryService';
+import { getCurrentSession, clearCurrentSession } from './services/authService';
+import { GuardiaoLoginModal } from './components/auth/GuardiaoLoginModal';
+import { SecurityCenterModal } from './components/auth/SecurityCenterModal';
+import { AuthSession } from './types';
 
 const STORAGE_KEY = 'ias_v2';
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState<AuthSession | null>(() => getCurrentSession());
+  const [showSecurityCenter, setShowSecurityCenter] = useState(false);
+
   const [ias, setIas] = useState<IAItem[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -474,11 +481,27 @@ export default function App() {
       <div className="fixed bottom-1/4 right-1/4 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-3xl pointer-events-none -z-10" />
 
       <div className="max-w-[1520px] mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Modal de Autenticação do Guardião */}
+        {!currentUser && (
+          <GuardiaoLoginModal onLoginSuccess={(session) => setCurrentUser(session)} />
+        )}
+
+        {/* Modal da Central de Segurança & Painel do Guardião */}
+        {showSecurityCenter && currentUser && (
+          <SecurityCenterModal currentUser={currentUser} onClose={() => setShowSecurityCenter(false)} />
+        )}
+
         {/* Header */}
         <Header
           ias={ias}
           onOpenCentralIA={() => setIsCentralIAOpen(true)}
           onOpenMotor={() => setIsCentralIAOpen(true)}
+          currentUser={currentUser}
+          onOpenSecurity={() => setShowSecurityCenter(true)}
+          onLogout={() => {
+            clearCurrentSession();
+            setCurrentUser(null);
+          }}
         />
 
         {/* 🧭 NAVEGAÇÃO ESTRATÉGICA DO HUB (Catálogo vs Ideias & Projetos vs Banco de Estudos vs Diário vs Dashboard) */}
@@ -498,7 +521,27 @@ export default function App() {
         {/* ========================================================================= */}
         {/* VISÃO 0: O MESTRE DO SISTEMA (Centro de Comando Supremo) */}
         {/* ========================================================================= */}
-        {currentHubView === 'master' && <SystemMasterView />}
+        {currentHubView === 'master' && (
+          currentUser?.role === 'ADMIN' ? (
+            <SystemMasterView />
+          ) : (
+            <div className="bg-slate-900 border border-rose-500/30 rounded-2xl p-8 text-center my-12 max-w-xl mx-auto space-y-4">
+              <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
+                <Shield className="w-6 h-6" />
+              </div>
+              <h3 className="text-white font-bold text-lg">Acesso Restrito pelo Guardião</h3>
+              <p className="text-sm text-slate-300 leading-relaxed">
+                "Esta área exige privilégios administrativos. Seu nível de acesso atual ({currentUser?.role || 'GUEST'}) não permite essa operação."
+              </p>
+              <button
+                onClick={() => setCurrentHubView('catalog')}
+                className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-medium transition"
+              >
+                Voltar ao Catálogo do Hub
+              </button>
+            </div>
+          )
+        )}
 
         {/* ========================================================================= */}
         {/* VISÃO 0.5: RECEPTOR MESTRE (Agente de Ensino Avançado) */}

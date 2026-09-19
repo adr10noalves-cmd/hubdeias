@@ -1,14 +1,17 @@
 import React from 'react';
-import { Sparkles, Layers, Cpu, Smile, Brain } from 'lucide-react';
-import { IAItem } from '../types';
+import { Sparkles, Layers, Cpu, Smile, Brain, Shield, LogOut, User } from 'lucide-react';
+import { IAItem, AuthSession } from '../types';
 
 interface HeaderProps {
   ias: IAItem[];
   onOpenMotor?: () => void;
   onOpenCentralIA?: () => void;
+  currentUser?: AuthSession | null;
+  onOpenSecurity?: () => void;
+  onLogout?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ ias, onOpenMotor, onOpenCentralIA }) => {
+export const Header: React.FC<HeaderProps> = ({ ias, onOpenMotor, onOpenCentralIA, currentUser, onOpenSecurity, onLogout }) => {
   const handleOpenCentral = onOpenCentralIA || onOpenMotor;
   const beginnerCount = ias.filter((i) => i.difficulty === 'Iniciante' || !i.difficulty).length;
   const freeCount = ias.filter(
@@ -17,6 +20,37 @@ export const Header: React.FC<HeaderProps> = ({ ias, onOpenMotor, onOpenCentralI
 
   return (
     <header className="pt-8 pb-6 text-center relative z-10">
+      {/* Barra superior de segurança & usuário */}
+      {currentUser && (
+        <div className="absolute top-2 right-4 flex items-center gap-2 bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-xl shadow-lg text-xs">
+          <div className="flex items-center gap-2 text-slate-300">
+            <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+              <User className="w-3.5 h-3.5" />
+            </div>
+            <span className="font-medium text-white">{currentUser.username}</span>
+            <span className="px-1.5 py-0.5 rounded bg-slate-800 text-emerald-400 font-mono text-[10px]">{currentUser.role}</span>
+          </div>
+          {onOpenSecurity && (
+            <button
+              onClick={onOpenSecurity}
+              title="Central de Segurança & Guardião"
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-400 transition flex items-center gap-1"
+            >
+              <Shield className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Segurança</span>
+            </button>
+          )}
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              title="Encerrar Sessão"
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 transition"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      )}
       <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-cyan-500/35 bg-cyan-500/10 text-cyan-300 text-xs font-bold tracking-widest uppercase mb-4 shadow-[0_0_20px_rgba(0,212,255,0.15)]">
         <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
         <span>HUB ESTRATÉGICO DE IAs — V2.4 • CENTRAL DE COMANDO</span>
