@@ -133,10 +133,10 @@ export function loadDB(): DatabaseSchema {
 
   for (const acc of defaultAccounts) {
     let existing = db.users.find(u => u.username.toLowerCase() === acc.username.toLowerCase());
-    const { salt, hash } = hashPassword(acc.pass);
-    const pwdHash = `${salt}:${hash}`;
 
     if (!existing) {
+      const { salt, hash } = hashPassword(acc.pass);
+      const pwdHash = `${salt}:${hash}`;
       db.users.push({
         id: acc.id,
         username: acc.username,
@@ -151,10 +151,10 @@ export function loadDB(): DatabaseSchema {
         lockedUntil: null,
       });
     } else {
-      existing.passwordHash = pwdHash;
-      existing.status = 'active';
-      existing.failedAttempts = 0;
-      existing.lockedUntil = null;
+      if (!existing.passwordHash) {
+        const { salt, hash } = hashPassword(acc.pass);
+        existing.passwordHash = `${salt}:${hash}`;
+      }
     }
   }
 
