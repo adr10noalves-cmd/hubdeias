@@ -1,4 +1,4 @@
-import { EngineStatus, EngineTestResult } from './types';
+import { EngineStatus, EngineTestResult } from './types.js';
 
 export const GROQ_MODELS = [
   'openai/gpt-oss-120b',

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { runIndividualEngineTest } from '../_shared/orchestratorCore';
+import { runIndividualEngineTest } from '../_shared/orchestratorCore.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');

@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { executeGroq } from '../_shared/groqAdapter';
-import { executeGemini } from '../_shared/geminiAdapter';
+import { executeGroq } from '../_shared/groqAdapter.js';
+import { executeGemini } from '../_shared/geminiAdapter.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers

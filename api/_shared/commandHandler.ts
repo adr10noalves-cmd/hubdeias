@@ -1,5 +1,5 @@
-import { executeGroq } from './groqAdapter';
-import { executeGemini } from './geminiAdapter';
+import { executeGroq } from './groqAdapter.js';
+import { executeGemini } from './geminiAdapter.js';
 
 /**
  * Executa requisição com failover transparente entre Groq e Gemini

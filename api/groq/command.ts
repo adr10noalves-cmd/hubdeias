@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { handleGroqCommand } from '../_shared/commandHandler';
+import { handleGroqCommand } from '../_shared/commandHandler.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS

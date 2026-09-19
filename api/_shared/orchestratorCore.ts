@@ -3,19 +3,19 @@ import {
   EngineTestResult,
   NormalizedAIResponse,
   OrchestrationRequest,
-} from './types';
+} from './types.js';
 import {
   executeGemini,
   testGemini,
   GEMINI_MODELS,
   DEFAULT_GEMINI_MODEL,
-} from './geminiAdapter';
+} from './geminiAdapter.js';
 import {
   executeGroq,
   testGroq,
   GROQ_MODELS,
   DEFAULT_GROQ_MODEL,
-} from './groqAdapter';
+} from './groqAdapter.js';
 
 /**
  * CAMADA CENTRAL DE EXECUÇÃO DE MOTORES

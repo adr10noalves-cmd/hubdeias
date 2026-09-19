@@ -1,5 +1,5 @@
 import { GoogleGenAI } from '@google/genai';
-import { EngineStatus, EngineTestResult } from './types';
+import { EngineStatus, EngineTestResult } from './types.js';
 
 export const GEMINI_MODELS = [
   'gemini-3.8-flash',

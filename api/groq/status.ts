@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { GROQ_MODELS, DEFAULT_GROQ_MODEL } from '../_shared/groqAdapter';
+import { GROQ_MODELS, DEFAULT_GROQ_MODEL } from '../_shared/groqAdapter.js';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');

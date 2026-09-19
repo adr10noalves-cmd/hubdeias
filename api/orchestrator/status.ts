@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getOrchestratorDiagnostics } from '../_shared/orchestratorCore';
+import { getOrchestratorDiagnostics } from '../_shared/orchestratorCore.js';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
