@@ -924,12 +924,37 @@ export default function App() {
         onClearCompare={handleClearCompare}
       />
 
-      {/* 🤖 CENTRAL IA — NÚCLEO INTELIGENTE DE ORQUESTRAÇÃO DO HUB */}
+      {/* 🤖 CENTRAL IA — AUXILIAR MESTRE & NÚCLEO DE ORQUESTRAÇÃO DO HUB */}
       <CentralAICoordinator
         catalog={ias}
         ideas={ideas}
+        projects={projects}
         studies={studies}
         evolutionLogs={evolutionLogs}
+        currentRoute={currentHubView}
+        currentProject={selectedProjectDetail}
+        currentUserRole={currentUser?.role || 'USER'}
+        onChangeView={(view) => {
+          setCurrentHubView(view);
+          if (view !== 'projects') {
+            setSelectedProjectDetail(null);
+          }
+        }}
+        onOpenProject={(projectId) => {
+          const found = projects.find((p) => p.id === projectId);
+          if (found) {
+            setSelectedProjectDetail(found);
+            setCurrentHubView('projects');
+          }
+        }}
+        onOpenAddIA={() => {
+          setEditingIA(null);
+          setIsAddModalOpen(true);
+        }}
+        onOpenGlobalSearch={() => setIsGlobalSearchOpen(true)}
+        onSaveIA={async (iaData) => {
+          handleSaveIA(iaData);
+        }}
         onOpenCatalogWithFilter={(cat) => {
           setSelectedCategory(cat);
           window.scrollTo({ top: 580, behavior: 'smooth' });

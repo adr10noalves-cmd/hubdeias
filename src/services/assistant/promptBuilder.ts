@@ -1,6 +1,9 @@
 import { FilteredTaskContext } from './contextBuilder';
 import { TaskComplexityAnalysis } from './taskComplexity';
-import { AssistantMode, IAItem } from '../../types';
+import { AssistantMode, IAItem, ProjectHubItem, UserRole } from '../../types';
+import { getCapabilitiesSummaryForPrompt } from './hubCapabilityRegistry';
+import { getToolsPromptSummary } from './hubToolRegistry';
+import { MainHubView } from '../../components/strategic/StrategicNavTabs';
 
 export interface PromptBuilderInput {
   userTask: string;
@@ -10,6 +13,10 @@ export interface PromptBuilderInput {
   provider: 'GEMINI' | 'GROQ';
   modelId: string;
   catalog: IAItem[];
+  currentRoute?: MainHubView;
+  currentSection?: string;
+  currentProject?: ProjectHubItem | null;
+  currentUserRole?: UserRole;
   history?: Array<{ role: 'user' | 'assistant'; content: string }>;
 }
 
@@ -21,79 +28,131 @@ export interface BuiltPromptResult {
 }
 
 /**
- * 13. PROMPT BUILDER DINÂMICO
- * Gera prompts sob medida considerando a complexidade, modelo, modo e contexto filtrado.
+ * PROMPT BUILDER DO AUXILIAR MESTRE DO HUB
+ * Gera prompts sob medida integrando:
+ * - Mapa de capacidades reais do Hub;
+ * - Registro de ferramentas autorizadas;
+ * - Consciência da tela e do projeto ativo;
+ * - Personalidade pedagógica e diretiva sem clichês.
  */
 export function buildDynamicPrompt(input: PromptBuilderInput): BuiltPromptResult {
-  const { userTask, context, complexity, activeMode, provider, modelId, catalog, history = [] } = input;
+  const {
+    userTask,
+    context,
+    complexity,
+    activeMode,
+    provider,
+    modelId,
+    catalog,
+    currentRoute = 'catalog',
+    currentSection,
+    currentProject,
+    currentUserRole = 'USER',
+    history = [],
+  } = input;
 
   const relevantCatalogSlice = catalog
-    .slice(0, 15)
-    .map((i) => `- ${i.name} (${i.category}): ${i.specialty}`)
+    .slice(0, 20)
+    .map((i) => `- ${i.name} (${i.category}): ${i.specialty} [${i.pricing}]`)
     .join('\n');
 
+  // Mapa conciso das capacidades reais do Hub
+  const capabilitiesSummary = getCapabilitiesSummaryForPrompt(currentUserRole);
+
+  // Resumo das ferramentas controladas
+  const toolsSummary = getToolsPromptSummary();
+
   // Diretrizes por Provedor & Modelo
-  const providerDirective = provider === 'GEMINI'
-    ? `VOCÊ É O GEMINI (${modelId}), MODELO PRINCIPAL DE RACIOCÍNIO PROFUNDO, ARQUITETURA E PLANEJAMENTO DO HUB.
-Foque em: rigor técnico, consistência arquitetural, raciocínio lógico em etapas e precisão conceitual. Não invente capacidades que não foram confirmadas no contexto.`
-    : `VOCÊ É O MODELO AUXILIAR GROQ (${modelId}), FOCADO EM VELOCIDADE, TRANSFORMAÇÃO E SÍNTESE EFICIENTE.
-Foque em: agilidade, concisão, estrutura direta e execução prática sem enrolação.`;
+  const providerDirective =
+    provider === 'GEMINI'
+      ? `VOCÊ É O AUXILIAR MESTRE DO HUB 2.0 (Motor Principal Gemini ${modelId}).
+Sua missão é atuar como assistente inteligente global do ecossistema: compreendendo onde o usuário está, ensinando com clareza como o sistema funciona, orientando o próximo passo, ativando navegação inteligente e executando ações autorizadas.`
+      : `VOCÊ É O AUXILIAR MESTRE DO HUB 2.0 (Motor de Alta Velocidade Groq ${modelId}).
+Foque em respostas ágeis, precisas, comandos diretos, execução prática de ferramentas e orientação imediata ao usuário.`;
 
-  // Seção de Contexto Filtrado
-  const contextSection = context.targetProject
-    ? `\n--- CONTEXTO CIRÚRGICO DO PROJETO EM FOCO ---
+  // Bloco de Consciência Contextual da Tela
+  const screenContext = `
+--- CONSCIÊNCIA CONTEXTUAL DA TELA ATUAL ---
+• Rota/Área Atual: "${currentRoute}"
+• Sub-Seção: "${currentSection || 'Visão Principal'}"
+• Perfil do Usuário: "${currentUserRole}"
+• Projeto em Foco no Momento: ${
+    currentProject
+      ? `"${currentProject.name}" (Status: ${currentProject.status}, Etapa: ${currentProject.currentStage}, Progresso: ${currentProject.progress}%, Próxima Ação: "${currentProject.nextAction || 'Não definida'}")`
+      : 'Nenhum projeto específico aberto na tela atual.'
+  }
+------------------------------------------`;
+
+  // Bloco de Histórico do Projeto
+  const projectMemoryContext = context.targetProject
+    ? `\n--- DETALHES DO PROJETO EM FOCO ---
 ${context.contextSummaryText}
----------------------------------------------`
-    : `\n--- AMBIENTE OPERACIONAL ---
-Operando no catálogo geral de inteligências artificiais e banco de estudos do Hub.
----------------------------`;
-
-  // Histórico Recente Relevante
-  const recentHistoryFormatted = history.length > 0
-    ? `\n--- DIÁLOGO RECENTE (ÚLTIMAS INTERAÇÕES) ---
-${history.slice(-4).map((h) => `${h.role === 'user' ? 'Usuário' : 'Orquestrador'}: ${h.content.slice(0, 300)}`).join('\n')}
---------------------------------------------`
+-----------------------------------`
     : '';
 
+  // Histórico Recente Relevante
+  const recentHistoryFormatted =
+    history.length > 0
+      ? `\n--- DIÁLOGO RECENTE (ÚLTIMAS INTERAÇÕES) ---
+${history.slice(-5).map((h) => `${h.role === 'user' ? 'Usuário' : 'Auxiliar Mestre'}: ${h.content.slice(0, 300)}`).join('\n')}
+--------------------------------------------`
+      : '';
+
   // Modo Simulação vs Modo Real
-  const modeInstruction = activeMode === 'SIMULATION'
-    ? `⚠️ MODO SIMULAÇÃO ATIVO (SANDBOX VIRTUAL):
-Você está simulando o comportamento de execução de forma preditiva. Analise o fluxo de dados projetado, preveja gargalos e avalie riscos ANTES que qualquer código vá para produção. Deixe explícito que este é um teste em ambiente virtual.`
-    : `✅ MODO EXECUÇÃO REAL / CONVERSAÇÃO:
-Gere recomendações, planos ou decisões com precisão para implementação prática imediata pelo usuário no Hub.`;
+  const modeInstruction =
+    activeMode === 'SIMULATION'
+      ? `⚠️ MODO SIMULAÇÃO ATIVO: Avalie fluxos, simule cenários de dados e aponte riscos antes de qualquer execução.`
+      : `✅ MODO OPERACIONAL ATIVO: Responda de forma direta, oriente e execute ferramentas quando solicitado.`;
 
   const systemPrompt = `${providerDirective}
 
-NÍVEL DE COMPLEXIDADE DETERMINADO: Nível ${complexity.level} (${complexity.levelName}) - Score ${complexity.score}/100
-MOTIVO DA ESCOLHA DO MODELO: ${complexity.reasoning}
-
+NÍVEL DE COMPLEXIDADE: Nível ${complexity.level} (${complexity.levelName})
 ${modeInstruction}
 
-${contextSection}
+${screenContext}
+${projectMemoryContext}
 
-FERRAMENTAS ÚTEIS DISPONÍVEIS NO CATÁLOGO DO HUB:
+--- CAPACIDADES REAIS DO HUB ---
+${capabilitiesSummary}
+-------------------------------
+
+--- FERRAMENTAS CONTROLADAS DO HUB (TOOL LAYER) ---
+${toolsSummary}
+---------------------------------------------------
+
+--- IAs DISPONÍVEIS NO CATÁLOGO DO HUB (Amostra) ---
 ${relevantCatalogSlice}
+---------------------------------------------------
 
-DIRETRIZES DE RESPOSTA:
-1. Responda em Português do Brasil (pt-BR) com alto nível de clareza e estrutura.
-2. Respeite estritamente a arquitetura existente e as decisões históricas registradas na memória.
-3. Não invente soluções que contradigam o histórico do projeto.
-4. Conclua sempre com 1 ou 2 próximos passos objetivos.
+DIRETRIZES FUNDAMENTAIS DO AUXILIAR MESTRE:
+1. PERSONALIDADE: Transmita clareza, competência, naturalidade e capacidade pedagógica. NUNCA diga "Como modelo de linguagem...".
+2. CONHECIMENTO DO HUB: Responda apenas com base nas funcionalidades REAIS descritas no mapa de capacidades acima. Não invente telas, botões ou comandos inexistentes.
+3. CONTEXTO DA TELA: Se o usuário perguntar "O que posso fazer aqui?", explique o que é possível fazer na tela atual. Se perguntar "O que faço agora?" dentro de um projeto, oriente com base na Próxima Ação e Etapa Atual.
+4. NAVEGAÇÃO & AÇÃO:
+   - Se o usuário pedir para ir a alguma área ("me leve aos projetos", "ver catálogo", "abrir diário", etc.), recomende a navegação e informe o toolCall correspondente (ex: {"name": "navigate_to", "parameters": {"target": "projects"}}).
+   - Se o usuário pedir para abrir um projeto específico ("abra o projeto X"), use {"name": "open_project", "parameters": {"projectName": "X"}}.
+   - Se o usuário pedir para cadastrar uma nova IA ("cadastre o Cursor", "adicione o Claude"), use {"name": "create_ai_entry", "parameters": {"name": "...", "category": "..."}}.
+5. SUCINTO E DIRETO: Prefira resposta direta + orientação + ação disponível. Evite palestras longas.
+6. IDIOMA OBRIGATÓRIO: Português do Brasil (pt-BR).
 
 FORMATO DE RETORNO EXIGIDO:
-Retorne EXCLUSIVAMENTE em formato JSON com as seguintes chaves:
+Retorne EXCLUSIVAMENTE em formato JSON estrito:
 {
-  "response": "Resposta em Markdown rica, analítica e com formatação elegante",
-  "keyTakeaways": ["Ponto chave 1", "Ponto chave 2"],
-  "nextAction": "Próxima ação recomendada imediata",
+  "response": "Resposta do Auxiliar Mestre em Markdown elegante, natural e instrutivo",
+  "toolCall": {
+    "name": "navigate_to" | "open_project" | "create_ai_entry" | "search_ai_catalog" | "search_hub" | null,
+    "parameters": {}
+  },
+  "keyTakeaways": ["Ponto principal 1", "Ponto principal 2"],
+  "nextAction": "Próximo passo recomendado",
   "suggestedActions": [
-    { "label": "Rótulo do botão", "actionType": "TIPO_ACAO", "target": "id opcional" }
+    { "label": "Rótulo amigável do botão", "actionType": "TIPO_ACAO", "target": "alvo_opcional" }
   ]
 }`;
 
   const userPrompt = `${recentHistoryFormatted}
 
-SOLICITAÇÃO DO USUÁRIO:
+MENSAGEM DO USUÁRIO:
 "${userTask}"`;
 
   const maxTokensExpected = complexity.level >= 3 ? 3000 : 1500;

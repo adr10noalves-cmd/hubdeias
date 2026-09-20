@@ -2,11 +2,13 @@ import {
   AssistantMode,
   AssistantIntent,
   IdeaItem,
+  ProjectHubItem,
   StudyItem,
   IAItem,
   StructuredAssistantContext,
   TaskPlan,
   OperationalExecutionRecord,
+  UserRole,
 } from '../../types';
 import { saveExecutionRecord } from './memoryManager';
 import { analyzeUserIntent, IntentAnalysisResult } from './intentAnalyzer';
@@ -17,15 +19,31 @@ import { validateExecutionOutput, ValidationReport } from './validationManager';
 import { buildFilteredTaskContext, FilteredTaskContext } from './contextBuilder';
 import { buildDynamicPrompt } from './promptBuilder';
 import { TaskComplexityAnalysis } from './taskComplexity';
+import {
+  executeHubTool,
+  ToolExecutionResult,
+  HubToolContext,
+  HubToolNavigationHandlers,
+  HubToolDataMutationHandlers,
+} from './hubToolRegistry';
+import { MainHubView } from '../../components/strategic/StrategicNavTabs';
 
 export interface AssistantEngineInput {
   userMessage: string;
   activeMode: AssistantMode;
   targetProjectId?: string;
   allIdeas: IdeaItem[];
+  allProjects?: ProjectHubItem[];
   allStudies: StudyItem[];
   catalog: IAItem[];
   history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  // Consciência contextual global do Hub
+  currentRoute?: MainHubView;
+  currentSection?: string;
+  currentProject?: ProjectHubItem | null;
+  currentUserRole?: UserRole;
+  navigationHandlers?: HubToolNavigationHandlers;
+  dataMutationHandlers?: HubToolDataMutationHandlers;
 }
 
 export interface AssistantEngineResponse {
@@ -53,6 +71,7 @@ export interface AssistantEngineResponse {
   modelUsed: string;
   fallbackTriggered: boolean;
   replyText: string;
+  toolExecution?: ToolExecutionResult;
   plan?: TaskPlan;
   simulationResult?: SimulationResult;
   validationReport?: ValidationReport;
@@ -75,28 +94,60 @@ export interface AssistantEngineResponse {
 }
 
 /**
- * 6. CICLO OPERACIONAL DO ASSISTENTE (11 PASSOS)
- * 1. Entender a intenção do usuário
+ * CICLO OPERACIONAL DO AUXILIAR MESTRE DO HUB 2.0
+ * 1. Entender a intenção do usuário (incluindo dúvidas do sistema, navegação e comandos de ação)
  * 2. Identificar a complexidade da tarefa
  * 3. Recuperar da memória persistente apenas o contexto relevante
- * 4. Identificar o projeto relacionado, quando existir
+ * 4. Identificar o projeto relacionado e a tela atual do usuário
  * 5. Selecionar o modelo mais adequado (Gemini Principal / Groq Auxiliar)
- * 6. Montar o contexto/prompt apropriado (Prompt Builder Dinâmico)
+ * 6. Montar o prompt dinâmico com o mapa de capacidades e ferramentas controladas
  * 7. Executar a tarefa com fallback transparente (/api/orchestrate)
- * 8. Analisar o resultado
- * 9. Validar se o resultado atende ao objetivo
- * 10. Registrar o resultado e a evolução na memória existente
- * 11. Continuar o fluxo quando houver uma próxima ação necessária
+ * 8. Executar ferramentas internas autorizadas (navegação, busca, cadastro de IA)
+ * 9. Analisar e validar a resposta
+ * 10. Registrar o resultado na memória persistente
+ * 11. Oferecer continuidade e próximas ações precisas
  */
 export async function processAssistantMessage(
   input: AssistantEngineInput
 ): Promise<AssistantEngineResponse> {
   const startTime = Date.now();
-  const { userMessage, activeMode, targetProjectId, allIdeas, allStudies, catalog, history = [] } = input;
+  const {
+    userMessage,
+    activeMode,
+    targetProjectId,
+    allIdeas,
+    allProjects = [],
+    allStudies,
+    catalog,
+    history = [],
+    currentRoute = 'catalog',
+    currentSection,
+    currentProject = null,
+    currentUserRole = 'USER',
+    navigationHandlers,
+    dataMutationHandlers,
+  } = input;
 
   // PASSO 1: ENTENDER A INTENÇÃO DO USUÁRIO
-  const intentResult = analyzeUserIntent(userMessage, allIdeas);
-  const effectiveProjectId = targetProjectId || intentResult.mentionedProjectId;
+  const intentResult = analyzeUserIntent(userMessage, allIdeas, allProjects);
+  const effectiveProjectId = targetProjectId || intentResult.mentionedProjectId || currentProject?.id;
+
+  // Contexto de ferramentas (quando handlers estiverem disponíveis)
+  const toolContext: HubToolContext | null =
+    navigationHandlers && dataMutationHandlers
+      ? {
+          currentUserRole,
+          currentRoute,
+          currentSection,
+          currentProject,
+          allProjects,
+          allIdeas,
+          allStudies,
+          catalog,
+          navigationHandlers,
+          dataMutationHandlers,
+        }
+      : null;
 
   // PASSO 3 & 4: RECUPERAR DA MEMÓRIA PERSISTENTE APENAS O CONTEXTO RELEVANTE (CONTEXT BUILDER CIRÚRGICO)
   const filteredContext: FilteredTaskContext = await buildFilteredTaskContext({
@@ -107,12 +158,12 @@ export async function processAssistantMessage(
   });
 
   const structuredContext: StructuredAssistantContext = {
-    projectId: filteredContext.targetProject?.id,
-    projectTitle: filteredContext.targetProject?.title,
+    projectId: filteredContext.targetProject?.id || currentProject?.id,
+    projectTitle: filteredContext.targetProject?.title || currentProject?.name,
     currentVersion: filteredContext.latestVersion,
-    currentStage: filteredContext.targetProject?.stage,
-    projectDescription: filteredContext.targetProject?.description,
-    objective: filteredContext.objective,
+    currentStage: filteredContext.targetProject?.stage || currentProject?.currentStage,
+    projectDescription: filteredContext.targetProject?.description || currentProject?.description,
+    objective: filteredContext.objective || currentProject?.objective,
     lastEvolution: filteredContext.recentChangesSummary[0],
     currentProblems: filteredContext.knownProblems,
     nextSteps: filteredContext.nextSteps,
@@ -137,7 +188,12 @@ export async function processAssistantMessage(
     recommendedModel: routeDecision.recommendedModel,
     alternativeModels: routeDecision.alternativeModels,
     taskType: routeDecision.complexity.level >= 3 ? ('CÓDIGO' as const) : ('GERAL' as const),
-    complexity: routeDecision.complexity.level >= 3 ? ('ALTA' as const) : routeDecision.complexity.level === 2 ? ('MÉDIA' as const) : ('BAIXA' as const),
+    complexity:
+      routeDecision.complexity.level >= 3
+        ? ('ALTA' as const)
+        : routeDecision.complexity.level === 2
+        ? ('MÉDIA' as const)
+        : ('BAIXA' as const),
     estimatedCost: 'GRATUITO' as const,
     executionStrategy: routeDecision.executionStrategy,
   };
@@ -167,7 +223,9 @@ export async function processAssistantMessage(
         status: 'resposta_validada',
         passed: true,
         score: 100,
-        criteriaEvaluated: [{ name: 'Simulação Virtual em Sandbox', passed: true, details: 'Cenário simulado sem alterar o projeto definitivo.' }],
+        criteriaEvaluated: [
+          { name: 'Simulação Virtual em Sandbox', passed: true, details: 'Cenário simulado sem alterar o projeto definitivo.' },
+        ],
         summary: 'Simulação virtual concluída no motor de alta velocidade Groq.',
         recommendations: ['Avaliar os riscos antes de aplicar no projeto real.'],
       },
@@ -205,14 +263,16 @@ export async function processAssistantMessage(
       suggestedActions: [
         { label: '🧪 Simular Cenário com Groq', actionType: 'SIMULATE_CURRENT_PLAN' },
         { label: '✨ Copiar Prompt da Etapa 1', actionType: 'COPY_PROMPT_STEP_1', payload: plan.steps[0]?.prompt },
-        ...(structuredContext.projectId ? [{ label: `💾 Adotar no Projeto "${structuredContext.projectTitle}"`, actionType: 'APPLY_PLAN_TO_PROJECT', target: structuredContext.projectId, payload: plan }] : []),
+        ...(structuredContext.projectId
+          ? [{ label: `💾 Adotar no Projeto "${structuredContext.projectTitle}"`, actionType: 'APPLY_PLAN_TO_PROJECT', target: structuredContext.projectId, payload: plan }]
+          : []),
       ],
       durationMs,
     };
   }
 
   // FLUXO ESPECÍFICO 3: DETECÇÃO DE NOVA IDEIA (Com confirmação explícita do usuário)
-  if (intentResult.detectedNewIdea && !effectiveProjectId) {
+  if (intentResult.detectedNewIdea && !effectiveProjectId && !intentResult.isAskingToRegisterAI) {
     const candidate = intentResult.detectedNewIdea;
     const replyText = `Percebi que você compartilhou uma nova ideia promissora:\n\n**Título Sugerido:** ${candidate.suggestedTitle}\n**Categoria:** ${candidate.category}\n**Descrição:** "${candidate.description}"\n\n**Quer que eu registre essa ideia no HUB?**\nAssim podemos acompanhar sua evolução desde o estágio inicial, criar planos de ação e relacionar com estudos.`;
 
@@ -247,7 +307,7 @@ export async function processAssistantMessage(
     };
   }
 
-  // PASSO 6: MONTAR O CONTEXTO/PROMPT APROPRIADO (PROMPT BUILDER DINÂMICO)
+  // PASSO 6: MONTAR O CONTEXTO/PROMPT COM CAPACIDADES, FERRAMENTAS E CONTEXTO DA TELA
   const builtPrompt = buildDynamicPrompt({
     userTask: userMessage,
     context: filteredContext,
@@ -256,6 +316,10 @@ export async function processAssistantMessage(
     provider: routeDecision.provider,
     modelId: routeDecision.modelId,
     catalog,
+    currentRoute,
+    currentSection,
+    currentProject,
+    currentUserRole,
     history,
   });
 
@@ -264,6 +328,7 @@ export async function processAssistantMessage(
   let providerUsed: 'GEMINI' | 'GROQ' = routeDecision.provider;
   let modelUsed: string = routeDecision.modelName;
   let fallbackTriggered = false;
+  let parsedToolCall: { name: string; params: any } | null = null;
 
   try {
     const response = await fetch('/api/orchestrate', {
@@ -283,7 +348,21 @@ export async function processAssistantMessage(
     if (response.ok) {
       const data = await response.json();
       if (data.success && data.data) {
-        replyText = data.data.response || data.data.content || JSON.stringify(data.data);
+        // Se a resposta vier estruturada (JSON parseado pelo orchestratorCore)
+        const responseData = data.data;
+        if (typeof responseData === 'object' && responseData !== null) {
+          replyText = responseData.response || responseData.content || '';
+          if (responseData.toolCall && responseData.toolCall.name) {
+            parsedToolCall = {
+              name: responseData.toolCall.name,
+              params: responseData.toolCall.parameters || responseData.toolCall.params || {},
+            };
+          }
+        }
+        if (!replyText) {
+          replyText = data.text || JSON.stringify(responseData);
+        }
+
         providerUsed = data.providerUsed || routeDecision.provider;
         modelUsed = data.modelUsed || routeDecision.modelId;
         fallbackTriggered = Boolean(data.fallbackTriggered);
@@ -294,16 +373,60 @@ export async function processAssistantMessage(
       throw new Error(`Servidor retornou status ${response.status}`);
     }
   } catch (err: any) {
-    console.warn('[AssistantEngine] Chamada à API de orquestração oscilou, acionando fallback local com memória persistente:', err?.message || err);
+    console.warn('[AssistantEngine] Falha na API de orquestração, operando com motor inteligente contextual:', err?.message || err);
     fallbackTriggered = true;
-    if (structuredContext.projectId) {
-      replyText = `Com base na memória do seu projeto **"${structuredContext.projectTitle}"** (${structuredContext.currentVersion}, estágio ${structuredContext.currentStage}):\n\n- **Objetivo Central:** ${structuredContext.objective || structuredContext.projectDescription}\n- **Última Evolução:** ${structuredContext.lastEvolution || 'Registro inicial'}\n- **Próximos Passos Registrados:** ${structuredContext.nextSteps.join('; ') || 'Definir próximas metas'}\n\nPara avançar na evolução do sistema, recomendo focarmos em: "${structuredContext.currentProblems[0] || 'Refinamento do escopo'}". Como deseja proceder?`;
+
+    // Resposta contextual de fallback baseada na tela e no projeto
+    if (intentResult.isAskingForSystemHelp) {
+      if (currentRoute === 'projects' && currentProject) {
+        replyText = `Você está dentro do **Agente Executor do Projeto "${currentProject.name}"**.\n\n**O que você pode fazer nesta tela:**\n- Debater estratégia e código diretamente com a IA no Terminal de Debate;\n- Criar, priorizar e concluir **Missões de Trabalho** na coluna central;\n- Tomar e documentar **Decisões Técnicas** com justificativa;\n- Visualizar a **Próxima Ação Imediata** recomendada;\n- Acompanhar a régua da **Jornada de Maturidade** do projeto.\n\nSua próxima ação registrada é: **"${currentProject.nextAction || 'Definir primeiro entregável'}"**.`;
+      } else if (currentRoute === 'catalog') {
+        replyText = `Você está no **Catálogo de IAs do Hub**.\n\n**O que você pode fazer nesta tela:**\n- Explorar mais de ${catalog.length} ferramentas categorizadas;\n- Filtrar por especialidade (Código, Imagem, Texto, Produtividade, etc.);\n- Filtrar por nível de experiência ou modelo de preço;\n- Clicar em qualquer card para abrir a **Ficha Operacional detalhada**;\n- Selecionar até 2 IAs para comparação lado a lado;\n- Cadastrar uma nova IA clicando no botão "+ Cadastrar IA" ou pedindo para mim: *"Cadastre o Claude"*!`;
+      } else if (currentRoute === 'projects') {
+        replyText = `Você está na área de **Gestão de Projetos Estratégicos**.\n\n**O que você pode fazer nesta tela:**\n- Visualizar todos os seus projetos divididos pelo funil de maturidade;\n- Criar novos projetos com objetivo e resultado esperado claros;\n- Clicar em qualquer projeto para abrir o **Agente Executor**, missões e decisões;\n- Acompanhar percentuais de progresso e próximas ações.`;
+      } else {
+        replyText = `Você está na visão **"${currentRoute}"** do Hub.\n\nSou o **Auxiliar Mestre do Hub 2.0**. Posso guiar você em qualquer área do sistema, sugerir a melhor IA para sua tarefa, abrir projetos existentes ou cadastrar novas ferramentas no catálogo. Como posso te ajudar agora?`;
+      }
+    } else if (currentProject) {
+      replyText = `Com base no projeto ativo **"${currentProject.name}"** (Etapa: ${currentProject.currentStage}, ${currentProject.progress}% concluído):\n\n- **Objetivo:** ${currentProject.objective || currentProject.description}\n- **Próxima Ação:** ${currentProject.nextAction || 'Não definida'}\n- **Ferramentas Vinculadas:** ${currentProject.aiTools?.join(', ') || 'Nenhuma'}\n\nPara avançar na maturidade deste projeto, recomendo focar na próxima ação imediata. Deseja debater essa etapa com o Executor?`;
     } else {
-      replyText = `Entendido! Estou operando como Núcleo de Orquestração Inteligente do Hub.\n\nPosso ajudar a estruturar ideias, planejar etapas, simular hipóteses ou orientar seus estudos técnicos com modelos de alta precisão. O que gostaria de executar?`;
+      replyText = `Olá! Sou o **Auxiliar Mestre do Hub 2.0**.\n\nConheço todas as telas e recursos do ecossistema. Posso ajudar você a:\n- **Navegar**: *"Me leve aos projetos"*, *"Abrir catálogo"*, *"Ver estudos"*\n- **Executar Projetos**: *"Abra o projeto [Nome]"*, *"O que faço agora?"*\n- **Consultar e Cadastrar IAs**: *"Qual IA usar para código?"*, *"Cadastre esta IA: Cursor"*\n- **Compreender o Hub**: *"O que posso fazer aqui?"*, *"Como funciona o roadmap?"*`;
     }
   }
 
-  // PASSO 8 & 9: ANALISAR E VALIDAR SE O RESULTADO ATENDE AO OBJETIVO
+  // PASSO 8: EXECUÇÃO CONTROLADA DE FERRAMENTAS (HUB TOOL LAYER)
+  let toolExecution: ToolExecutionResult | undefined;
+
+  // Decide qual toolCall executar: a identificada pelo modelo OU a identificada com alta confiança pelo analisador de intenção
+  const toolToRun =
+    parsedToolCall ||
+    (intentResult.suggestedToolCall && intentResult.confidence >= 0.9 ? intentResult.suggestedToolCall : null);
+
+  if (toolToRun && toolContext) {
+    try {
+      toolExecution = await executeHubTool(toolToRun.name, toolToRun.params, toolContext);
+
+      // Se a ferramenta foi executada com sucesso, complementamos a resposta para o usuário de forma elegante
+      if (toolExecution.success) {
+        if (toolToRun.name === 'create_ai_entry') {
+          replyText = `⚡ **IA Cadastrada com Sucesso!**\n\n${toolExecution.message}\n\nA nova ferramenta já está disponível no catálogo e pronta para ser utilizada nos seus projetos e estudos.`;
+        } else if (toolToRun.name === 'open_project') {
+          replyText = `📂 **Abrindo Projeto...**\n\n${toolExecution.message}\n\n${replyText}`;
+        } else if (toolToRun.name === 'navigate_to') {
+          replyText = `🧭 **Navegação Realizada**\n\n${toolExecution.message}\n\n${replyText}`;
+        }
+      } else if (toolExecution.message) {
+        // Se houve erro ou aviso de permissão/duplicidade na ferramenta
+        if (toolToRun.name === 'create_ai_entry' && toolExecution.message.includes('já está cadastrada')) {
+          replyText = `ℹ️ **Verificação de Catálogo:**\n\n${toolExecution.message}\n\nVocê pode consultar a ficha dela no Catálogo de IAs.`;
+        }
+      }
+    } catch (toolErr: any) {
+      console.warn('[AssistantEngine] Erro ao executar ferramenta do Hub:', toolErr);
+    }
+  }
+
+  // PASSO 9: VALIDAR SE O RESULTADO ATENDE AO OBJETIVO
   const validationReport = validateExecutionOutput({
     rawOutput: replyText,
     expectedDeliverable: 'Resposta contextualizada, rigorosa e acionável',
@@ -341,11 +464,11 @@ export async function processAssistantMessage(
   // PASSO 11: CONTINUAR O FLUXO COM PRÓXIMAS AÇÕES SUGERIDAS (MANTENDO O USUÁRIO NO CONTROLE)
   const suggestedActions: AssistantEngineResponse['suggestedActions'] = [];
 
-  if (structuredContext.projectId) {
+  if (currentProject) {
     suggestedActions.push({
-      label: `💡 Ver Projeto "${structuredContext.projectTitle}"`,
+      label: `💡 Ver Projeto "${currentProject.name}"`,
       actionType: 'OPEN_PROJECT_DETAIL',
-      target: structuredContext.projectId,
+      target: currentProject.id,
     });
     suggestedActions.push({
       label: '🧪 Simular Próximo Passo',
@@ -354,20 +477,33 @@ export async function processAssistantMessage(
     suggestedActions.push({
       label: '📝 Registrar Aprendizado no Diário',
       actionType: 'OPEN_LEARNING_MODAL',
-      target: structuredContext.projectId,
+      target: currentProject.id,
+    });
+  } else if (currentRoute === 'catalog') {
+    suggestedActions.push({
+      label: '➕ Cadastrar Nova IA',
+      actionType: 'OPEN_ADD_IA',
+    });
+    suggestedActions.push({
+      label: '⚖️ Comparar IAs',
+      actionType: 'OPEN_COMPARE',
+    });
+    suggestedActions.push({
+      label: '🚀 Ir para Projetos',
+      actionType: 'NAVIGATE_PROJECTS',
     });
   } else {
     suggestedActions.push({
+      label: '🚀 Ir para Projetos',
+      actionType: 'NAVIGATE_PROJECTS',
+    });
+    suggestedActions.push({
+      label: '📚 Explorar Catálogo',
+      actionType: 'NAVIGATE_CATALOG',
+    });
+    suggestedActions.push({
       label: '📋 Planejar Construção',
       actionType: 'SWITCH_TO_PLANNING',
-    });
-    suggestedActions.push({
-      label: '🧪 Modo Simulação',
-      actionType: 'SWITCH_TO_SIMULATION',
-    });
-    suggestedActions.push({
-      label: '✨ Gerador de Prompts',
-      actionType: 'OPEN_PROMPT_GEN',
     });
   }
 
@@ -382,6 +518,7 @@ export async function processAssistantMessage(
     modelUsed,
     fallbackTriggered,
     replyText,
+    toolExecution,
     validationReport,
     suggestedActions,
     executionRecordId,

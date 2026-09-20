@@ -18,7 +18,11 @@ import {
   AlertTriangle,
   ChevronDown,
   Sliders,
-  Zap
+  Zap,
+  Compass,
+  PlusCircle,
+  HelpCircle,
+  FolderOpen
 } from 'lucide-react';
 import { 
   IAItem, 
@@ -26,7 +30,9 @@ import {
   StudyItem, 
   EvolutionLog, 
   AssistantMode,
-  TaskPlan
+  TaskPlan,
+  ProjectHubItem,
+  UserRole
 } from '../types';
 import { 
   processAssistantMessage, 
@@ -35,20 +41,33 @@ import {
 import { AssistantMemoryModal } from './strategic/AssistantMemoryModal';
 import { ProjectLearningModal } from './strategic/ProjectLearningModal';
 import { OrchestratorSettingsModal } from './strategic/OrchestratorSettingsModal';
+import { MainHubView } from './strategic/StrategicNavTabs';
 
 interface CentralAICoordinatorProps {
   catalog: IAItem[];
   ideas?: IdeaItem[];
+  projects?: ProjectHubItem[];
   studies?: StudyItem[];
   evolutionLogs?: EvolutionLog[];
+  currentRoute?: MainHubView;
+  currentSection?: string;
+  currentProject?: ProjectHubItem | null;
+  currentUserRole?: UserRole;
+  onChangeView?: (view: MainHubView) => void;
+  onOpenProject?: (projectId: string) => void;
+  onOpenAddIA?: () => void;
+  onOpenGlobalSearch?: () => void;
   onOpenCatalogWithFilter?: (category: string) => void;
   onOpenPromptGen?: () => void;
-  onOpenCompare?: () => void;
+  onOpenCompare?: (ids?: number[]) => void;
   onOpenAIDetail?: (ai: IAItem) => void;
   onOpenIdeaDetail?: (idea: IdeaItem) => void;
   onCreateIdea?: (idea: IdeaItem) => Promise<void> | void;
   onUpdateIdea?: (idea: IdeaItem) => Promise<void> | void;
   onSelectStudy?: (study: StudyItem) => void;
+  onSaveIA?: (ia: Partial<IAItem>) => Promise<IAItem | void>;
+  isOpenControlled?: boolean;
+  onToggleOpenControlled?: (open: boolean) => void;
 }
 
 interface Message {
@@ -66,6 +85,7 @@ interface Message {
   durationMs?: number;
   plan?: TaskPlan;
   validationReport?: any;
+  toolExecution?: any;
   pendingConfirmation?: {
     type: 'REGISTER_NEW_IDEA' | 'EVOLVE_IDEA_VERSION' | 'CREATE_STUDY';
     title: string;
@@ -80,8 +100,17 @@ interface Message {
 export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
   catalog,
   ideas = [],
+  projects = [],
   studies = [],
   evolutionLogs = [],
+  currentRoute = 'catalog' as MainHubView,
+  currentSection,
+  currentProject = null,
+  currentUserRole = 'USER' as UserRole,
+  onChangeView,
+  onOpenProject,
+  onOpenAddIA,
+  onOpenGlobalSearch,
   onOpenCatalogWithFilter,
   onOpenPromptGen,
   onOpenCompare,
@@ -90,14 +119,34 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
   onCreateIdea,
   onUpdateIdea,
   onSelectStudy,
+  onSaveIA,
+  isOpenControlled,
+  onToggleOpenControlled,
 }) => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  const isOpen = isOpenControlled !== undefined ? isOpenControlled : internalIsOpen;
+
+  const setIsOpen = (val: boolean) => {
+    if (onToggleOpenControlled) {
+      onToggleOpenControlled(val);
+    } else {
+      setInternalIsOpen(val);
+    }
+  };
+
   const [activeMode, setActiveMode] = useState<AssistantMode>('CONVERSATION');
   const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>(undefined);
   const [status, setStatus] = useState<'IDLE' | 'THINKING' | 'SPEAKING' | 'ERROR' | 'ONLINE'>('ONLINE');
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [copiedPromptIndex, setCopiedPromptIndex] = useState<string | null>(null);
+
+  // Sincroniza projeto selecionado com o projeto atual da tela caso mude
+  useEffect(() => {
+    if (currentProject && currentProject.id !== selectedProjectId) {
+      setSelectedProjectId(currentProject.id);
+    }
+  }, [currentProject]);
 
   // Modais de suporte
   const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
@@ -109,12 +158,13 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
     {
       id: 'msg-init',
       role: 'assistant',
-      content: 'Olá! Sou o Núcleo de Orquestração Inteligente do Hub.\n\nOpero conectada à memória de seus projetos, estudos e catálogo de IAs. Posso ajudar a conceber ideias, planejar etapas, simular cenários de execução com a Groq e auditar resultados.\n\nO que você deseja construir ou evoluir hoje?',
+      content: 'Olá! Sou o **Auxiliar Mestre do Hub 2.0**.\n\nConheço profundamente todas as áreas do sistema, seus projetos ativos, estudos e o catálogo de ferramentas de IA.\n\nPosso direcionar você para qualquer área, orientar seu próximo passo ou executar ações como cadastrar uma nova IA no catálogo.\n\nComo posso te ajudar agora?',
       mode: 'CONVERSATION',
       suggestedActions: [
-        { label: '📋 Planejar Construção', actionType: 'SWITCH_TO_PLANNING' },
-        { label: '🧪 Simulação com Groq', actionType: 'SWITCH_TO_SIMULATION' },
-        { label: '🧠 Ver Memória Ativa', actionType: 'OPEN_MEMORY_MODAL' },
+        { label: '❓ O que posso fazer aqui?', actionType: 'ASK_WHAT_CAN_I_DO' },
+        { label: '🚀 Me leve aos Projetos', actionType: 'NAVIGATE_PROJECTS' },
+        { label: '📚 Explorar Catálogo', actionType: 'NAVIGATE_CATALOG' },
+        { label: '➕ Cadastrar Nova IA', actionType: 'OPEN_ADD_IA' },
       ],
       timestamp: new Date(),
     }
@@ -122,7 +172,10 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const activeProject = ideas.find((i) => i.id === selectedProjectId);
+  const activeProject =
+    projects.find((p) => p.id === selectedProjectId) ||
+    ideas.find((i) => i.id === selectedProjectId) ||
+    currentProject;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -161,9 +214,44 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
         activeMode: currentMode,
         targetProjectId: selectedProjectId,
         allIdeas: ideas,
+        allProjects: projects,
         allStudies: studies,
         catalog,
         history: historyPayload,
+        currentRoute,
+        currentSection,
+        currentProject: activeProject && 'status' in activeProject ? (activeProject as ProjectHubItem) : currentProject,
+        currentUserRole,
+        navigationHandlers: {
+          navigateToView: (view) => {
+            if (onChangeView) onChangeView(view);
+          },
+          openProject: (projectId) => {
+            if (onOpenProject) onOpenProject(projectId);
+            else if (onChangeView) {
+              onChangeView('projects');
+            }
+          },
+          openAddIA: () => {
+            if (onOpenAddIA) onOpenAddIA();
+          },
+          openGlobalSearch: () => {
+            if (onOpenGlobalSearch) onOpenGlobalSearch();
+          },
+          openCompare: (ids) => {
+            if (onOpenCompare) onOpenCompare(ids);
+          },
+          openAIDetail: (ia) => {
+            if (onOpenAIDetail) onOpenAIDetail(ia);
+          },
+        },
+        dataMutationHandlers: {
+          saveIA: async (iaData) => {
+            if (onSaveIA) {
+              return await onSaveIA(iaData);
+            }
+          },
+        },
       });
 
       // Se o engine detectou automaticamente um projeto mencionado, atualiza o contexto ativo
@@ -185,6 +273,7 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
         durationMs: engineResponse.durationMs,
         plan: engineResponse.plan,
         validationReport: engineResponse.validationReport,
+        toolExecution: engineResponse.toolExecution,
         pendingConfirmation: engineResponse.pendingConfirmation,
         suggestedActions: engineResponse.suggestedActions,
         intentDetected: engineResponse.intent,
@@ -203,7 +292,7 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
         content: 'Houve uma oscilação na resposta do servidor. Seus dados e contexto de projeto permanecem seguros na memória local. Como prefere prosseguir?',
         suggestedActions: [
           { label: '🧠 Abrir Painel de Memória', actionType: 'OPEN_MEMORY_MODAL' },
-          { label: '📂 Explorar Catálogo', actionType: 'OPEN_CATALOG' },
+          { label: '📂 Explorar Catálogo', actionType: 'NAVIGATE_CATALOG' },
         ],
         timestamp: new Date(),
       };
@@ -214,7 +303,26 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
   };
 
   const handleActionClick = async (actionType: string, target?: string, payload?: any) => {
-    if (actionType === 'SWITCH_TO_PLANNING') {
+    if (actionType === 'ASK_WHAT_CAN_I_DO') {
+      handleSend('O que posso fazer aqui nesta tela do Hub?');
+    } else if (actionType === 'NAVIGATE_PROJECTS') {
+      onChangeView?.('projects');
+      handleSend('Me leve aos projetos');
+    } else if (actionType === 'NAVIGATE_CATALOG') {
+      onChangeView?.('catalog');
+      handleSend('Me leve ao catálogo de IAs');
+    } else if (actionType === 'NAVIGATE_STUDIES') {
+      onChangeView?.('studies');
+      handleSend('Me leve aos estudos');
+    } else if (actionType === 'NAVIGATE_DIARY') {
+      onChangeView?.('diary');
+      handleSend('Me leve ao diário de bordo');
+    } else if (actionType === 'OPEN_ADD_IA') {
+      onOpenAddIA?.();
+      handleSend('Quero cadastrar uma nova IA');
+    } else if (actionType === 'OPEN_COMPARE') {
+      onOpenCompare?.();
+    } else if (actionType === 'SWITCH_TO_PLANNING') {
       setActiveMode('PLANNING');
       handleSend('Por favor, monte o plano estruturado em etapas para construirmos o objetivo.', 'PLANNING');
     } else if (actionType === 'SWITCH_TO_SIMULATION') {
@@ -223,81 +331,58 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
     } else if (actionType === 'OPEN_MEMORY_MODAL') {
       setIsMemoryModalOpen(true);
     } else if (actionType === 'OPEN_LEARNING_MODAL') {
-      const ideaToLearn = ideas.find((i) => i.id === target) || activeProject;
+      const ideaToLearn = ideas.find((i) => i.id === target);
       if (ideaToLearn) {
         setActiveLearningIdea(ideaToLearn);
         setIsLearningModalOpen(true);
       }
     } else if (actionType === 'OPEN_PROJECT_DETAIL' && target) {
-      const found = ideas.find((i) => i.id === target);
-      if (found && onOpenIdeaDetail) {
-        onOpenIdeaDetail(found);
+      if (onOpenProject) {
+        onOpenProject(target);
+      } else {
+        const found = ideas.find((i) => i.id === target);
+        if (found && onOpenIdeaDetail) {
+          onOpenIdeaDetail(found);
+        }
       }
     } else if (actionType === 'CONFIRM_REGISTER_IDEA' && payload) {
-      // 4. REGISTRO COM CONFIRMAÇÃO DO USUÁRIO
       const newIdea: IdeaItem = {
         id: `idea-${Date.now()}`,
         title: payload.title || payload.suggestedTitle,
         description: payload.description,
-        category: payload.category || 'Geral',
-        objective: payload.description,
-        problemSolved: 'Registrado via orquestrador do Hub',
-        targetAudience: payload.targetAudience || 'Usuários do ecossistema',
+        category: payload.category || 'Outros',
+        status: 'Ativa',
         stage: '1. Ideia',
         priority: 'Média',
-        status: 'Ativa',
+        objective: payload.description,
+        problemSolved: '',
+        targetAudience: '',
         relatedTechnologies: [],
         relatedIANames: [],
         currentVersion: 'V1',
-        observations: 'Cadastrado a partir de recomendação e confirmação do usuário no Assistente.',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-
       if (onCreateIdea) {
         await onCreateIdea(newIdea);
       }
       setSelectedProjectId(newIdea.id);
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `confirm-${Date.now()}`,
-          role: 'assistant',
-          content: `✅ A ideia **"${newIdea.title}"** foi cadastrada com sucesso no Firestore!\n\nEla agora está vinculada à memória ativa do Assistente como V1. Deseja que eu gere o plano de desenvolvimento em etapas?`,
-          suggestedActions: [
-            { label: '📋 Gerar Plano de Etapas', actionType: 'SWITCH_TO_PLANNING' },
-            { label: '💡 Ver Detalhes da Ideia', actionType: 'OPEN_PROJECT_DETAIL', target: newIdea.id },
-          ],
-          timestamp: new Date(),
-        }
-      ]);
-    } else if (actionType === 'APPLY_PLAN_TO_PROJECT' && target && payload) {
-      const plan = payload as TaskPlan;
-      const targetIdea = ideas.find((i) => i.id === target);
-      if (targetIdea && onUpdateIdea) {
-        const updated: IdeaItem = {
-          ...targetIdea,
-          roadmap: plan.steps.map((stg) => ({
-            id: `rm-${stg.stepNumber}`,
-            stageTitle: `Etapa ${stg.stepNumber}: ${stg.title}`,
-            goal: stg.deliverable,
-            status: stg.status,
-          })),
-          nextSteps: `Etapa 1: ${plan.steps[0]?.title || 'Iniciar desenvolvimento'}`,
-          updatedAt: new Date().toISOString(),
-        };
-        await onUpdateIdea(updated);
-        alert(`Plano em ${plan.steps.length} etapas adotado com sucesso no projeto "${targetIdea.title}"!`);
-      }
-    } else if (actionType === 'OPEN_CATALOG') {
-      if (onOpenCatalogWithFilter) onOpenCatalogWithFilter(target || '');
-      setIsOpen(false);
+      const confirmMsg: Message = {
+        id: `sys-${Date.now()}`,
+        role: 'assistant',
+        content: `✅ Ideia **"${newIdea.title}"** registrada com sucesso na memória do Hub!\n\nDefinida como projeto ativo. Podemos começar a planejar suas etapas ou simular cenários.`,
+        suggestedActions: [
+          { label: '📋 Planejar Etapas com Gemini', actionType: 'SWITCH_TO_PLANNING' },
+          { label: '🧪 Simular Cenário com Groq', actionType: 'SWITCH_TO_SIMULATION' },
+        ],
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, confirmMsg]);
+    } else if (actionType === 'SIMULATE_CURRENT_PLAN') {
+      setActiveMode('SIMULATION');
+      handleSend('Execute a simulação preditiva das etapas deste plano via Groq.', 'SIMULATION');
     } else if (actionType === 'OPEN_PROMPT_GEN') {
       if (onOpenPromptGen) onOpenPromptGen();
-      setIsOpen(false);
-    } else if (actionType === 'OPEN_COMPARE') {
-      if (onOpenCompare) onOpenCompare();
       setIsOpen(false);
     }
   };
@@ -308,15 +393,27 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
     setTimeout(() => setCopiedPromptIndex(null), 2500);
   };
 
+  // Mapeamento visual da rota para o cabeçalho
+  const routeLabels: Record<string, string> = {
+    catalog: 'Catálogo de IAs',
+    projects: 'Gestão de Projetos',
+    ideas: 'Central de Ideias',
+    studies: 'Banco de Estudos',
+    diary: 'Diário de Bordo',
+    dashboard: 'Dashboard Executivo',
+    master: 'O Mestre',
+    receptor: 'Receptor Mestre',
+  };
+
   return (
     <>
       <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
-        {/* Botão flutuante do Robô / Central IA */}
+        {/* Botão flutuante do Auxiliar Mestre / Central IA */}
         {!isOpen && (
           <button
             onClick={() => setIsOpen(true)}
-            className="group relative flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-slate-900 via-slate-850 to-indigo-950 text-white rounded-full shadow-2xl border border-indigo-500/30 hover:border-indigo-400/60 transition-all duration-300 hover:scale-105 hover:shadow-indigo-500/20"
-            title="Núcleo de Orquestração Inteligente do Hub"
+            className="group relative flex items-center gap-3 px-4 py-3 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-full shadow-2xl border border-indigo-500/40 hover:border-cyan-400/60 transition-all duration-300 hover:scale-105 hover:shadow-indigo-500/30"
+            title="Auxiliar Mestre do Hub 2.0"
             id="central-ia-floating-btn"
           >
             {/* Indicador de status pulse */}
@@ -326,26 +423,28 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
             </span>
 
             <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-600 to-cyan-500 flex items-center justify-center shadow-inner text-white font-bold relative overflow-hidden">
-              <Cpu className="w-5 h-5 animate-pulse text-white" />
+              <Bot className="w-5 h-5 animate-pulse text-white" />
             </div>
 
             <div className="flex flex-col text-left pr-1">
               <span className="text-xs font-bold text-cyan-300 tracking-wider flex items-center gap-1">
                 CENTRAL IA <Sparkles className="w-3 h-3 text-amber-400" />
               </span>
-              <span className="text-[11px] text-slate-300">
-                {activeProject ? `🎯 ${activeProject.title.slice(0, 15)}...` : 'Orquestrador do Hub'}
+              <span className="text-[11px] text-slate-300 truncate max-w-[150px]">
+                {currentProject
+                  ? `🎯 ${currentProject.name}`
+                  : routeLabels[currentRoute] || 'Auxiliar Mestre'}
               </span>
             </div>
           </button>
         )}
 
-        {/* Janela Modal do Chat do Núcleo de Orquestração */}
+        {/* Janela Modal do Chat do Auxiliar Mestre */}
         {isOpen && (
-          <div className="w-[94vw] sm:w-[490px] h-[660px] max-h-[88vh] bg-slate-900/98 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-300">
+          <div className="w-[94vw] sm:w-[500px] h-[680px] max-h-[88vh] bg-slate-900/98 backdrop-blur-xl border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-300">
             
             {/* Cabeçalho */}
-            <div className="px-4 py-3.5 bg-gradient-to-r from-slate-900 via-indigo-950/80 to-slate-900 border-b border-slate-800 flex items-center justify-between">
+            <div className="px-4 py-3 bg-gradient-to-r from-slate-900 via-indigo-950/90 to-slate-900 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="relative">
                   <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
@@ -358,11 +457,14 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-white tracking-wide flex items-center gap-1.5">
-                    CENTRAL IA <span className="text-[9px] bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded font-mono border border-cyan-500/30">NÚCLEO HUB</span>
+                    CENTRAL DE IA <span className="text-[9px] bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded font-mono border border-cyan-500/30">AUXILIAR MESTRE</span>
                   </h3>
-                  <p className="text-[11px] text-slate-400">
-                    {status === 'THINKING' ? 'Consultando memória & inferindo...' : 'Orquestração, Memória & Simulação'}
-                  </p>
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                    <span className="truncate max-w-[200px]">
+                      {currentProject ? `Projeto: ${currentProject.name}` : `Tela: ${routeLabels[currentRoute] || currentRoute}`}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -377,7 +479,7 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
                   <span className="hidden sm:inline">Memória</span>
                 </button>
 
-                {/* Botão de Governança e Configurações */}
+                {/* Botão de Configurações */}
                 <button
                   onClick={() => setIsSettingsModalOpen(true)}
                   className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
@@ -403,8 +505,29 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
               </div>
             </div>
 
+            {/* Faixa de Consciência Contextual */}
+            <div className="px-3 py-1.5 bg-slate-950/80 border-b border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+              <div className="flex items-center gap-2 truncate">
+                <span className="flex items-center gap-1 text-cyan-400">
+                  <Compass className="w-3 h-3" />
+                  {routeLabels[currentRoute] || currentRoute}
+                </span>
+                {currentProject && (
+                  <>
+                    <span className="text-slate-600">•</span>
+                    <span className="text-indigo-300 font-medium truncate max-w-[180px]">
+                      🎯 {currentProject.name} ({currentProject.currentStage})
+                    </span>
+                  </>
+                )}
+              </div>
+              <span className="text-[10px] text-slate-500 font-mono">
+                Perfil: {currentUserRole}
+              </span>
+            </div>
+
             {/* Seletor dos 4 Modos Operacionais */}
-            <div className="px-3 py-2 bg-slate-950 border-b border-slate-800 flex items-center justify-between gap-1 text-[11px]">
+            <div className="px-3 py-1.5 bg-slate-950 border-b border-slate-800 flex items-center justify-between gap-1 text-[11px]">
               <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
                 <button
                   onClick={() => setActiveMode('CONVERSATION')}
@@ -449,7 +572,7 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
               </div>
 
               {/* Seletor de Projeto Ativo */}
-              {ideas.length > 0 && (
+              {projects.length > 0 && (
                 <div className="relative">
                   <select
                     value={selectedProjectId || ''}
@@ -457,30 +580,15 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
                     className="bg-slate-850 border border-slate-750 text-slate-300 text-[10px] rounded-lg px-2 py-1 outline-none max-w-[130px] truncate"
                   >
                     <option value="">🎯 Geral (Hub)</option>
-                    {ideas.map((idea) => (
-                      <option key={idea.id} value={idea.id}>
-                        {idea.title}
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
                       </option>
                     ))}
                   </select>
                 </div>
               )}
             </div>
-
-            {/* Banner de Contexto Ativo */}
-            {activeProject && (
-              <div className="px-3 py-1.5 bg-indigo-950/40 border-b border-indigo-900/40 flex items-center justify-between text-[11px] text-indigo-300">
-                <span className="truncate">
-                  🎯 <strong>{activeProject.title}</strong> ({activeProject.currentVersion || 'V1'})
-                </span>
-                <button
-                  onClick={() => setSelectedProjectId(undefined)}
-                  className="text-[10px] text-slate-400 hover:text-rose-300 underline ml-2"
-                >
-                  Desacoplar
-                </button>
-              </div>
-            )}
 
             {/* Corpo de Mensagens */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-950/60 custom-scrollbar">
@@ -498,151 +606,99 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
                   >
                     {/* Badge se for Simulação */}
                     {m.isSimulation && (
-                      <div className="mb-2 p-2 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[11px] font-bold flex items-center gap-1.5">
-                        <FlaskConical className="w-4 h-4" />
-                        <span>🧪 SIMULAÇÃO DE CENÁRIO (AMBIENTE VIRTUAL GROQ)</span>
+                      <div className="mb-2 flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded text-[10px] font-mono">
+                        <FlaskConical className="w-3 h-3" />
+                        SIMULAÇÃO VIRTUAL GROQ (NÃO ALTERA PRODUÇÃO)
                       </div>
                     )}
 
-                    {/* Texto principal da mensagem */}
-                    <div className="whitespace-pre-wrap font-sans">{m.content}</div>
-
-                    {/* Renderização de Plano em Etapas se houver */}
-                    {m.plan && (
-                      <div className="mt-3 pt-3 border-t border-slate-750 space-y-2">
-                        <div className="font-bold text-cyan-300 text-xs flex items-center gap-1">
-                          <ListOrdered className="w-3.5 h-3.5" /> Etapas do Plano:
-                        </div>
-                        {m.plan.steps.map((stg) => (
-                          <div
-                            key={stg.stepNumber}
-                            className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5 text-xs"
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="font-bold text-white">
-                                Etapa {stg.stepNumber}: {stg.title}
-                              </span>
-                              <button
-                                onClick={() => copyPromptText(stg.prompt, `step-${stg.stepNumber}`)}
-                                className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 text-[10px] flex items-center gap-1 font-mono"
-                                title="Copiar prompt da etapa"
-                              >
-                                {copiedPromptIndex === `step-${stg.stepNumber}` ? (
-                                  <>
-                                    <Check className="w-3 h-3 text-emerald-400" /> Copiado
-                                  </>
-                                ) : (
-                                  <>
-                                    <Copy className="w-3 h-3" /> Copiar Prompt
-                                  </>
-                                )}
-                              </button>
-                            </div>
-                            <div className="text-slate-400 text-[11px]">
-                              IA: <code className="text-indigo-300">{stg.toolRecommendation}</code>
-                            </div>
-                          </div>
-                        ))}
+                    {/* Badge de Execução de Ferramenta */}
+                    {m.toolExecution && m.toolExecution.success && (
+                      <div className="mb-2 flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded text-[10px] font-mono">
+                        <CheckCircle2 className="w-3 h-3" />
+                        AÇÃO INTERNA EXECUTADA: {m.toolExecution.actionExecuted || 'OK'}
                       </div>
                     )}
 
-                    {/* Card de Confirmação para Registro de Ideia */}
-                    {m.pendingConfirmation && (
-                      <div className="mt-3 p-3 rounded-xl bg-indigo-950/60 border border-indigo-500/40 space-y-2 text-xs">
-                        <div className="font-bold text-white flex items-center gap-1.5">
-                          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                          {m.pendingConfirmation.promptQuestion}
-                        </div>
-                        <div className="text-[11px] text-slate-300">
-                          Título: <strong>{m.pendingConfirmation.title}</strong>
-                        </div>
-                      </div>
-                    )}
+                    {/* Texto com quebras de linha e formatação */}
+                    <div className="whitespace-pre-line space-y-2">
+                      {m.content}
+                    </div>
 
-                    {/* Ações sugeridas */}
-                    {m.suggestedActions && m.suggestedActions.length > 0 && (
-                      <div className="mt-3 pt-2.5 border-t border-slate-750/80 flex flex-wrap gap-1.5">
-                        {m.suggestedActions.map((act, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => handleActionClick(act.actionType, act.target, act.payload)}
-                            className="text-[11px] bg-indigo-600/30 hover:bg-indigo-600/50 text-cyan-300 hover:text-white border border-indigo-500/40 px-2.5 py-1 rounded-lg transition-all duration-200 flex items-center gap-1 font-medium shadow-sm"
-                          >
-                            <span>{act.label}</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </button>
-                        ))}
+                    {/* Metadados Técnicos de Inferência */}
+                    {m.role === 'assistant' && (m.modelUsed || m.complexityLevel) && (
+                      <div className="mt-3 pt-2 border-t border-slate-750/70 flex flex-wrap items-center justify-between gap-1 text-[10px] text-slate-400 font-mono">
+                        <span className="flex items-center gap-1">
+                          <Cpu className="w-3 h-3 text-cyan-400" />
+                          {m.modelUsed || 'Gemini Pro'}
+                        </span>
+                        {m.durationMs && <span>⚡ {m.durationMs}ms</span>}
                       </div>
                     )}
                   </div>
 
-                  <div className="text-[10px] text-slate-400 mt-1.5 px-1 flex flex-wrap items-center gap-2">
-                    <span className="text-slate-500">{m.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    {m.providerUsed && (
-                      <span className={`inline-flex items-center gap-1 font-semibold px-1.5 py-0.5 rounded text-[9.5px] ${
-                        m.providerUsed === 'GEMINI'
-                          ? 'bg-cyan-950/60 text-cyan-300 border border-cyan-800/60'
-                          : 'bg-amber-950/60 text-amber-300 border border-amber-800/60'
-                      }`}>
-                        {m.providerUsed === 'GEMINI' ? <Sparkles className="w-3 h-3 text-cyan-400" /> : <Zap className="w-3 h-3 text-amber-400" />}
-                        {m.providerUsed === 'GEMINI' ? 'Gemini' : 'Groq'} • {m.modelUsed}
-                      </span>
-                    )}
-                    {m.complexityLevel && (
-                      <span className="text-slate-500 bg-slate-800/60 px-1.5 py-0.5 rounded text-[9px] border border-slate-700/50">
-                        Nível {m.complexityLevel}: {m.complexityLevelName}
-                      </span>
-                    )}
-                    {m.fallbackTriggered && (
-                      <span className="text-amber-300 bg-amber-950/60 border border-amber-800/50 px-1 py-0.5 rounded text-[9px]">
-                        Fallback Ativo
-                      </span>
-                    )}
-                    {m.durationMs && (
-                      <span className="text-slate-500 text-[9px]">
-                        {(m.durationMs / 1000).toFixed(1)}s
-                      </span>
-                    )}
-                  </div>
+                  {/* Ações sugeridas em botões clicáveis */}
+                  {m.suggestedActions && m.suggestedActions.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2 max-w-[92%]">
+                      {m.suggestedActions.map((act, idx) => (
+                        <button
+                          key={idx}
+                          onClick={() => handleActionClick(act.actionType, act.target, act.payload)}
+                          className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white rounded-lg border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                        >
+                          <span>{act.label}</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
 
               {loading && (
-                <div className="flex items-start gap-2">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-900/50 border border-indigo-700/50 flex items-center justify-center text-cyan-400">
-                    <Cpu className="w-4 h-4 animate-spin" />
-                  </div>
-                  <div className="bg-slate-850 border border-slate-750 px-4 py-3 rounded-2xl rounded-bl-xs text-xs text-slate-400 flex items-center gap-2">
-                    <span className="animate-pulse">
-                      {activeMode === 'SIMULATION'
-                        ? 'Executando simulação de cenário no Groq...'
-                        : 'Recuperando contexto e orquestrando resposta...'}
-                    </span>
-                  </div>
+                <div className="flex items-center gap-2 text-slate-400 text-xs p-2">
+                  <div className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                  <span>Auxiliar Mestre consultando o ecossistema do Hub...</span>
                 </div>
               )}
+
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Sugestões Rápidas de Ação */}
-            <div className="px-3 py-2 bg-slate-900 border-t border-slate-800 flex gap-2 overflow-x-auto text-xs no-scrollbar">
-              {[
-                'Quero construir um novo projeto',
-                'Simular cenário com Groq',
-                'Quero melhorar meu Auditor SST',
-                'Qual melhor IA para código?'
-              ].map((sug, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleSend(sug)}
-                  className="whitespace-nowrap bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-cyan-300 px-3 py-1 rounded-full border border-slate-700 transition-colors text-[11px]"
-                >
-                  {sug}
-                </button>
-              ))}
+            {/* Barra de atalhos rápidos contextuais */}
+            <div className="px-3 py-1.5 bg-slate-900 border-t border-slate-800 flex items-center gap-1.5 overflow-x-auto no-scrollbar text-[11px]">
+              <span className="text-[10px] text-slate-500 whitespace-nowrap">Atalhos:</span>
+              <button
+                onClick={() => handleSend('O que posso fazer aqui nesta tela?')}
+                className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded text-[11px] whitespace-nowrap border border-slate-750 flex items-center gap-1"
+              >
+                <HelpCircle className="w-3 h-3 text-cyan-400" />
+                O que posso fazer aqui?
+              </button>
+              <button
+                onClick={() => handleSend('Me leve aos projetos')}
+                className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded text-[11px] whitespace-nowrap border border-slate-750 flex items-center gap-1"
+              >
+                <FolderOpen className="w-3 h-3 text-indigo-400" />
+                Ir para Projetos
+              </button>
+              <button
+                onClick={() => handleSend('Qual IA do Hub é melhor para código?')}
+                className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded text-[11px] whitespace-nowrap border border-slate-750 flex items-center gap-1"
+              >
+                <Sparkles className="w-3 h-3 text-amber-400" />
+                Qual IA usar?
+              </button>
+              <button
+                onClick={() => onOpenAddIA?.()}
+                className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded text-[11px] whitespace-nowrap border border-slate-750 flex items-center gap-1"
+              >
+                <PlusCircle className="w-3 h-3 text-emerald-400" />
+                Cadastrar IA
+              </button>
             </div>
 
-            {/* Caixa de Entrada */}
+            {/* Input de Mensagem */}
             <div className="p-3 bg-slate-900 border-t border-slate-800 flex items-center gap-2">
               <input
                 type="text"
@@ -654,9 +710,9 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
                     ? 'Descreva o que deseja construir...'
                     : activeMode === 'SIMULATION'
                     ? 'Qual cenário deseja simular?'
-                    : 'Como o Núcleo pode ajudar seu projeto?'
+                    : 'Pergunte sobre o Hub, navegue ou comande...'
                 }
-                className="flex-1 bg-slate-950 text-white placeholder-slate-500 text-xs sm:text-sm px-4 py-3 rounded-xl border border-slate-750 focus:outline-none focus:border-indigo-500 transition-colors"
+                className="flex-1 bg-slate-950 text-white placeholder-slate-500 text-xs sm:text-sm px-4 py-3 rounded-xl border border-slate-750 focus:outline-none focus:border-cyan-500 transition-colors"
               />
               <button
                 onClick={() => handleSend()}
@@ -680,15 +736,15 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
           activeProject
             ? {
                 projectId: activeProject.id,
-                projectTitle: activeProject.title,
+                projectTitle: 'name' in activeProject ? activeProject.name : activeProject.title,
                 projectDescription: activeProject.description,
-                currentStage: activeProject.stage,
-                currentVersion: activeProject.currentVersion || 'V1',
+                currentStage: 'currentStage' in activeProject ? activeProject.currentStage : activeProject.stage,
+                currentVersion: 'currentVersion' in activeProject ? (activeProject as any).currentVersion : 'V1',
                 objective: activeProject.objective,
-                lastEvolution: activeProject.currentVersion || 'V1',
-                currentProblems: activeProject.problemSolved ? [activeProject.problemSolved] : [],
+                lastEvolution: 'lastEvolution' in activeProject ? (activeProject as any).lastEvolution : 'V1',
+                currentProblems: (activeProject as any).problemSolved ? [(activeProject as any).problemSolved] : [],
                 decisions: [],
-                nextSteps: activeProject.nextSteps ? [activeProject.nextSteps] : [],
+                nextSteps: (activeProject as any).nextSteps ? [(activeProject as any).nextSteps] : [],
                 relatedStudies: studies
                   .filter((s) => s.relatedProjectIds?.includes(activeProject.id))
                   .map((s) => ({ id: s.id, theme: s.theme, level: s.level, progress: s.progress })),
