@@ -601,6 +601,7 @@ export interface ProjectHubItem {
   aiTools: string[];
   notes: string;
   history: ProjectHistoryItem[];
+  roadmap?: RoadmapItem[];
 }
 
 // --- TIPOS DE AUTENTICAÇÃO E SEGURANÇA (GUARDIÃO & CENTRAL DE SEGURANÇA) ---
