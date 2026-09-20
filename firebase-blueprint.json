@@ -163,6 +163,43 @@
         "createdAt": { "type": "string" }
       },
       "required": ["id", "mode", "isSimulation", "taskTitle", "result", "status"]
+    },
+    "users": {
+      "title": "Usuários e Contas do Sistema",
+      "description": "Contas de usuários do Hub de IAs com controle de perfis e autenticação segura",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "status": { "type": "string" },
+        "passwordHash": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "lastLogin": { "type": "string" },
+        "lockedUntil": { "type": "string" },
+        "failedAttempts": { "type": "number" }
+      },
+      "required": ["id", "username", "name", "role", "status", "passwordHash"]
+    },
+    "security_events": {
+      "title": "Auditoria e Eventos de Segurança",
+      "description": "Registro de eventos de login, bloqueios, acessos e auditoria de segurança",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "username": { "type": "string" },
+        "event": { "type": "string" },
+        "severity": { "type": "string" },
+        "metadata": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "ip": { "type": "string" },
+        "device": { "type": "string" }
+      },
+      "required": ["id", "username", "event", "severity", "timestamp"]
     }
   },
   "firestore": {
@@ -193,6 +230,14 @@
     "/operational_executions/{executionId}": {
       "schema": "operational_executions",
       "description": "Histórico persistente de execuções operacionais e simulações do assistente"
+    },
+    "/users/{userId}": {
+      "schema": "users",
+      "description": "Coleção segura de usuários e credenciais"
+    },
+    "/security_events/{eventId}": {
+      "schema": "security_events",
+      "description": "Log persistente de auditoria e segurança"
     }
   }
 }

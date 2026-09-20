@@ -17,6 +17,7 @@ interface StrategicNavTabsProps {
   currentView: MainHubView;
   onChangeView: (view: MainHubView) => void;
   onOpenGlobalSearch: () => void;
+  onOpenCentralIA?: () => void;
   ideasCount: number;
   projectsCount: number;
   studiesCount: number;
@@ -27,6 +28,7 @@ export const StrategicNavTabs: React.FC<StrategicNavTabsProps> = ({
   currentView,
   onChangeView,
   onOpenGlobalSearch,
+  onOpenCentralIA,
   ideasCount,
   projectsCount,
   studiesCount,
@@ -36,6 +38,19 @@ export const StrategicNavTabs: React.FC<StrategicNavTabsProps> = ({
     <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-2 bg-slate-900/90 backdrop-blur-xl border border-cyan-500/30 rounded-2xl mb-6 shadow-[0_10px_35px_rgba(0,0,0,0.5)]">
       {/* Abas Principais */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+        {/* Botão de Destaque: Central de I.A. após Login */}
+        {onOpenCentralIA && (
+          <button
+            type="button"
+            onClick={onOpenCentralIA}
+            className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap bg-gradient-to-r from-purple-600 via-indigo-600 to-cyan-500 hover:from-purple-500 hover:to-cyan-400 text-white shadow-[0_0_20px_rgba(168,85,247,0.4)] border border-cyan-300/40 hover:scale-[1.02] active:scale-[0.98]"
+            title="Abrir Central de I.A. Inteligente"
+          >
+            <Sparkles className="w-4 h-4 text-cyan-200 animate-pulse" />
+            <span>Central de I.A.</span>
+          </button>
+        )}
+
         {/* Aba 0: O Mestre do Sistema */}
         <button
           type="button"

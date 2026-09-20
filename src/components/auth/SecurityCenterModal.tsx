@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { UserAccount, SecurityEvent, AuthSession } from '../../types';
+import { 
+  getAllUsers, 
+  createUser, 
+  updateUser, 
+  deleteUser, 
+  toggleUserLock, 
+  getSecurityEvents 
+} from '../../services/authService';
 import { Shield, Users, Activity, Lock, Unlock, Key, Trash2, Plus, AlertCircle, CheckCircle2, X, Terminal, Server, Edit2 } from 'lucide-react';
 
 interface SecurityCenterModalProps {
@@ -39,14 +47,10 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
 
   const loadSecurityData = async () => {
     try {
-      const uRes = await fetch('/api/auth/users');
-      if (uRes.ok) {
-        setUsers(await uRes.json());
-      }
-      const eRes = await fetch('/api/auth/events');
-      if (eRes.ok) {
-        setEvents(await eRes.json());
-      }
+      const loadedUsers = await getAllUsers();
+      setUsers(loadedUsers);
+      const loadedEvents = await getSecurityEvents();
+      setEvents(loadedEvents);
     } catch (err) {
       console.error('Erro ao carregar dados de segurança:', err);
     }
@@ -66,13 +70,13 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
   const handleToggleLock = async (userId: string) => {
     if (!isAdmin) return;
     try {
-      const res = await fetch(`/api/auth/users/${userId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ toggleLock: true }),
-      });
-      if (res.ok) {
+      const res = await toggleUserLock(userId);
+      if (res.success) {
         await loadSecurityData();
+        setActionSuccess('Status da conta atualizado com sucesso.');
+        setTimeout(() => setActionSuccess(null), 3000);
+      } else {
+        setActionError(res.error || 'Erro ao alterar status da conta.');
       }
     } catch (err) {
       console.error('Erro ao alterar status do usuário:', err);
@@ -90,18 +94,17 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
     if (!confirmed) return;
 
     try {
-      const res = await fetch(`/api/auth/users/${userId}`, { method: 'DELETE' });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success) {
+      const res = await deleteUser(userId, username);
+      if (res.success) {
         await loadSecurityData();
         setActionSuccess(`Usuário "${username}" removido com sucesso.`);
         setTimeout(() => setActionSuccess(null), 3500);
       } else {
-        setActionError(data.error || 'Erro ao excluir usuário.');
+        setActionError(res.error || 'Erro ao excluir usuário.');
       }
     } catch (err) {
       console.error('Erro ao excluir usuário:', err);
-      setActionError('Erro de rede ao excluir usuário.');
+      setActionError('Erro de conexão ao excluir usuário.');
     }
   };
 
@@ -112,20 +115,15 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
     setIsSubmitting(true);
 
     try {
-      const res = await fetch('/api/auth/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: newUsername.trim(),
-          name: newName.trim(),
-          email: newEmail.trim(),
-          password: newPassword.trim(),
-          role: newRole,
-        }),
+      const res = await createUser({
+        username: newUsername.trim(),
+        name: newName.trim(),
+        email: newEmail.trim(),
+        password: newPassword.trim(),
+        role: newRole,
       });
 
-      const data = await res.json();
-      if (res.ok && data.success) {
+      if (res.success) {
         setShowNewUserModal(false);
         setNewUsername('');
         setNewName('');
@@ -133,10 +131,10 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
         setNewPassword('');
         setNewRole('USER');
         await loadSecurityData();
-        setActionSuccess('Usuário cadastrado com sucesso no banco de dados!');
+        setActionSuccess('Novo usuário cadastrado e salvo com sucesso!');
         setTimeout(() => setActionSuccess(null), 3500);
       } else {
-        setActionError(data.error || 'Erro ao criar usuário.');
+        setActionError(res.error || 'Erro ao criar usuário.');
       }
     } catch (err: any) {
       setActionError('Erro de conexão ao criar usuário.');
@@ -175,20 +173,15 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
         payload.password = editPassword.trim();
       }
 
-      const res = await fetch(`/api/auth/users/${editingUser.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+      const res = await updateUser(editingUser.id, payload);
 
-      const data = await res.json();
-      if (res.ok && data.success) {
+      if (res.success) {
         setEditingUser(null);
         await loadSecurityData();
-        setActionSuccess('Conta atualizada com sucesso no banco de dados!');
+        setActionSuccess('Cadastro e credenciais atualizados com sucesso!');
         setTimeout(() => setActionSuccess(null), 3500);
       } else {
-        setActionError(data.error || 'Erro ao atualizar usuário.');
+        setActionError(res.error || 'Erro ao atualizar usuário.');
       }
     } catch (err) {
       setActionError('Erro de conexão ao atualizar usuário.');

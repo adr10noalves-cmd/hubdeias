@@ -69,22 +69,27 @@ export interface PasskeyCredential {
   revokedAt?: string | null;
 }
 
-const DB_FILE = path.join(process.cwd(), 'data', 'security_storage.json');
+function getDBFilePath(): string {
+  try {
+    const defaultPath = path.join(process.cwd(), 'data', 'security_storage.json');
+    const defaultDir = path.dirname(defaultPath);
+    if (!fs.existsSync(defaultDir)) {
+      fs.mkdirSync(defaultDir, { recursive: true });
+    }
+    fs.accessSync(defaultDir, fs.constants.W_OK);
+    return defaultPath;
+  } catch (e) {
+    return path.join('/tmp', 'security_storage.json');
+  }
+}
+
+const DB_FILE = getDBFilePath();
 
 interface DatabaseSchema {
   users: UserAccount[];
   sessions: AuthSession[];
   events: SecurityEvent[];
   passkeys: PasskeyCredential[];
-}
-
-// Garantir diretório data/
-if (!fs.existsSync(path.join(process.cwd(), 'data'))) {
-  try {
-    fs.mkdirSync(path.join(process.cwd(), 'data'), { recursive: true });
-  } catch (e) {
-    console.error('Erro ao criar pasta data:', e);
-  }
 }
 
 // Hash seguro com PBKDF2 e Salt individual

@@ -42,6 +42,18 @@ service cloud.firestore {
       allow read: if true;
       allow write: if true;
     }
+
+    // Gestão de Usuários e Autenticação do Hub
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Registro de Auditoria e Eventos de Segurança
+    match /security_events/{eventId} {
+      allow read: if true;
+      allow write: if true;
+    }
   }
 }
 

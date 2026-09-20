@@ -474,6 +474,18 @@ export default function App() {
     ? [selectedCategory as IACategory]
     : CATEGORIES;
 
+  // 🔒 GATEWAY DE AUTENTICAÇÃO: A Central de IA e toda a interface só existem após autenticação
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-[#070b18] text-[#e8eef6] bg-grid-pattern relative flex items-center justify-center p-4 selection:bg-cyan-500/30 selection:text-cyan-200">
+        {/* Ambient background glows */}
+        <div className="fixed top-0 left-1/4 w-96 h-96 bg-cyan-600/10 rounded-full blur-3xl pointer-events-none -z-10" />
+        <div className="fixed bottom-1/4 right-1/4 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-3xl pointer-events-none -z-10" />
+        <GuardiaoLoginModal onLoginSuccess={(session) => setCurrentUser(session)} />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#070b18] text-[#e8eef6] bg-grid-pattern relative pb-20 selection:bg-cyan-500/30 selection:text-cyan-200">
       {/* Ambient background glows */}
@@ -481,13 +493,8 @@ export default function App() {
       <div className="fixed bottom-1/4 right-1/4 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-3xl pointer-events-none -z-10" />
 
       <div className="max-w-[1520px] mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Modal de Autenticação do Guardião */}
-        {!currentUser && (
-          <GuardiaoLoginModal onLoginSuccess={(session) => setCurrentUser(session)} />
-        )}
-
         {/* Modal da Central de Segurança & Painel do Guardião */}
-        {showSecurityCenter && currentUser && (
+        {showSecurityCenter && (
           <SecurityCenterModal currentUser={currentUser} onClose={() => setShowSecurityCenter(false)} />
         )}
 
@@ -512,6 +519,7 @@ export default function App() {
             if (view !== 'projects') setSelectedProjectDetail(null);
           }}
           onOpenGlobalSearch={() => setIsGlobalSearchOpen(true)}
+          onOpenCentralIA={() => setIsCentralIAOpen(true)}
           ideasCount={ideas.length}
           projectsCount={projects.length}
           studiesCount={studies.length}

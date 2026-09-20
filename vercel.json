@@ -5,6 +5,10 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/api/auth/users/:id",
+      "destination": "/api/auth/users/[id]"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/$1"
     },
