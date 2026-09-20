@@ -18,6 +18,8 @@ import {
   logSecurityEventServer,
   AuthSession,
   UserAccount,
+  loadDB,
+  saveDB,
 } from './server/authEngine';
 
 const app = express();
@@ -194,23 +196,6 @@ Retorne obrigatoriamente um objeto JSON com chave "candidates".`;
 });
 
 // --- ROTAS DA CENTRAL DE AUTENTICAÇÃO E MOTOR DE SEGURANÇA SERVER-SIDE ---
-const DB_FILE = path.join(process.cwd(), 'data', 'security_storage.json');
-
-function loadServerDB() {
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      return JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
-    }
-  } catch (e) {}
-  return { users: [], sessions: [], events: [], passkeys: [] };
-}
-
-function saveServerDB(dbData: any) {
-  try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(dbData, null, 2), 'utf-8');
-  } catch (e) {}
-}
-
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) {
@@ -218,7 +203,7 @@ app.post('/api/auth/login', async (req, res) => {
     return;
   }
 
-  const db = loadServerDB();
+  const db = loadDB();
   const cleanUser = String(username).trim().toLowerCase();
   const user = db.users.find((u: any) => u.username.toLowerCase() === cleanUser || u.email.toLowerCase() === cleanUser);
 
@@ -298,7 +283,7 @@ app.post('/api/auth/login', async (req, res) => {
       });
     }
 
-    saveServerDB(db);
+    saveDB(db);
 
     if (user.status === 'locked') {
       res.status(423).json({ success: false, lockedOut: true, error: `Muitas tentativas incorretas. Conta bloqueada por ${lockoutMins} minutos.` });
@@ -325,7 +310,7 @@ app.post('/api/auth/login', async (req, res) => {
   };
 
   db.sessions.push(session);
-  saveServerDB(db);
+  saveDB(db);
 
   logSecurityEventServer({
     userId: user.id,
@@ -341,11 +326,11 @@ app.post('/api/auth/login', async (req, res) => {
 app.post('/api/auth/logout', (req, res) => {
   const { sessionId } = req.body || {};
   if (sessionId) {
-    const db = loadServerDB();
+    const db = loadDB();
     const session = db.sessions.find((s: any) => s.id === sessionId);
     if (session) {
       session.revokedAt = new Date().toISOString();
-      saveServerDB(db);
+      saveDB(db);
       logSecurityEventServer({
         userId: session.userId,
         username: session.username,
@@ -359,7 +344,7 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 app.get('/api/auth/users', (req, res) => {
-  const db = loadServerDB();
+  const db = loadDB();
   const safeUsers = db.users.map((u: any) => ({
     id: u.id,
     username: u.username,
@@ -381,18 +366,26 @@ app.post('/api/auth/users', (req, res) => {
     return;
   }
 
-  const db = loadServerDB();
-  if (db.users.some((u: any) => u.username.toLowerCase() === username.toLowerCase())) {
+  const cleanUsername = String(username).trim();
+  const cleanPassword = String(password).trim();
+
+  if (!cleanUsername || !cleanPassword) {
+    res.status(400).json({ success: false, error: 'Usuário e senha não podem ser vazios.' });
+    return;
+  }
+
+  const db = loadDB();
+  if (db.users.some((u: any) => u.username.toLowerCase() === cleanUsername.toLowerCase())) {
     res.status(400).json({ success: false, error: 'Nome de usuário já existe.' });
     return;
   }
 
-  const { salt, hash } = hashPassword(password);
+  const { salt, hash } = hashPassword(cleanPassword);
   const newUser: UserAccount = {
     id: 'usr_' + nodeCrypto.randomBytes(4).toString('hex'),
-    username: username.trim(),
-    name: name?.trim() || username,
-    email: email?.trim() || `${username}@hubdeias.local`,
+    username: cleanUsername,
+    name: name?.trim() || cleanUsername,
+    email: email?.trim() || `${cleanUsername}@hubdeias.local`,
     role: role || 'USER',
     status: 'active',
     passwordHash: `${salt}:${hash}`,
@@ -402,35 +395,60 @@ app.post('/api/auth/users', (req, res) => {
   };
 
   db.users.push(newUser);
-  saveServerDB(db);
+  saveDB(db);
 
   logSecurityEventServer({
+    userId: newUser.id,
     username: newUser.username,
     event: 'USUARIO_CRIADO',
     severity: 'info',
     metadata: `Novo usuário ${newUser.username} criado com cargo ${newUser.role}.`,
   });
 
-  res.json({ success: true, user: { id: newUser.id, username: newUser.username, role: newUser.role } });
+  res.json({
+    success: true,
+    user: {
+      id: newUser.id,
+      username: newUser.username,
+      name: newUser.name,
+      email: newUser.email,
+      role: newUser.role,
+      status: newUser.status,
+      createdAt: newUser.createdAt,
+    },
+  });
 });
 
 app.patch('/api/auth/users/:id', (req, res) => {
   const { id } = req.params;
-  const { name, email, role, password, toggleLock, status } = req.body || {};
-  const db = loadServerDB();
+  const { username, name, email, role, password, toggleLock, status } = req.body || {};
+  const db = loadDB();
   const user = db.users.find((u: any) => u.id === id);
   if (!user) {
     res.status(404).json({ success: false, error: 'Usuário não encontrado.' });
     return;
   }
 
-  if (name !== undefined) user.name = name.trim();
-  if (email !== undefined) user.email = email.trim();
+  // Validação de alteração de username (login)
+  if (username !== undefined && String(username).trim().length > 0) {
+    const cleanUser = String(username).trim();
+    if (cleanUser.toLowerCase() !== user.username.toLowerCase()) {
+      const exists = db.users.some((u: any) => u.id !== user.id && u.username.toLowerCase() === cleanUser.toLowerCase());
+      if (exists) {
+        res.status(400).json({ success: false, error: 'Este nome de usuário já está em uso por outra conta.' });
+        return;
+      }
+      user.username = cleanUser;
+    }
+  }
+
+  if (name !== undefined) user.name = String(name).trim();
+  if (email !== undefined) user.email = String(email).trim();
   if (role !== undefined) user.role = role;
   if (status !== undefined) user.status = status;
 
   if (password && typeof password === 'string' && password.trim().length > 0) {
-    const { salt, hash } = hashPassword(password);
+    const { salt, hash } = hashPassword(password.trim());
     user.passwordHash = `${salt}:${hash}`;
   }
 
@@ -441,7 +459,7 @@ app.patch('/api/auth/users/:id', (req, res) => {
   }
 
   user.updatedAt = new Date().toISOString();
-  saveServerDB(db);
+  saveDB(db);
 
   logSecurityEventServer({
     userId: user.id,
@@ -451,32 +469,50 @@ app.patch('/api/auth/users/:id', (req, res) => {
     metadata: `Conta de usuário ${user.username} atualizada por administrador.`,
   });
 
-  res.json({ success: true, user });
+  res.json({
+    success: true,
+    user: {
+      id: user.id,
+      username: user.username,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      updatedAt: user.updatedAt,
+    },
+  });
 });
 
 app.delete('/api/auth/users/:id', (req, res) => {
   const { id } = req.params;
-  const db = loadServerDB();
+  const db = loadDB();
   const index = db.users.findIndex((u: any) => u.id === id);
   if (index === -1) {
     res.status(404).json({ success: false, error: 'Usuário não encontrado.' });
     return;
   }
-  const removed = db.users.splice(index, 1)[0];
-  saveServerDB(db);
+  const removed = db.users[index];
+  if (removed.username === 'admin') {
+    res.status(400).json({ success: false, error: 'A conta mestre do administrador não pode ser excluída.' });
+    return;
+  }
+
+  db.users.splice(index, 1);
+  saveDB(db);
 
   logSecurityEventServer({
+    userId: removed.id,
     username: removed.username,
     event: 'USUARIO_DESATIVADO',
     severity: 'warn',
-    metadata: `Usuário ${removed.username} removido do sistema.`,
+    metadata: `Usuário ${removed.username} removido do sistema por administrador.`,
   });
 
   res.json({ success: true });
 });
 
 app.get('/api/auth/events', (req, res) => {
-  const db = loadServerDB();
+  const db = loadDB();
   res.json(db.events || []);
 });
 

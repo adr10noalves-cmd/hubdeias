@@ -13,6 +13,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
   const [events, setEvents] = useState<SecurityEvent[]>([]);
   const [showNewUserModal, setShowNewUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form novo usuário
   const [newUsername, setNewUsername] = useState('');
@@ -22,6 +23,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
   const [newRole, setNewRole] = useState<'ADMIN' | 'OPERATOR' | 'USER' | 'GUEST'>('USER');
 
   // Form edição de usuário
+  const [editUsername, setEditUsername] = useState('');
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editRole, setEditRole] = useState<'ADMIN' | 'OPERATOR' | 'USER' | 'GUEST'>('USER');
@@ -50,6 +52,17 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
     }
   };
 
+  const handleOpenNewUser = () => {
+    setEditingUser(null);
+    setNewUsername('');
+    setNewName('');
+    setNewEmail('');
+    setNewPassword('');
+    setNewRole('USER');
+    setActionError(null);
+    setShowNewUserModal(true);
+  };
+
   const handleToggleLock = async (userId: string) => {
     if (!isAdmin) return;
     try {
@@ -59,7 +72,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
         body: JSON.stringify({ toggleLock: true }),
       });
       if (res.ok) {
-        loadSecurityData();
+        await loadSecurityData();
       }
     } catch (err) {
       console.error('Erro ao alterar status do usuário:', err);
@@ -69,35 +82,44 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
   const handleDeleteUser = async (userId: string, username: string) => {
     if (!isAdmin) return;
     if (username === 'admin') {
-      alert('Não é permitido excluir a conta mestre do administrador.');
+      setActionError('Não é permitido excluir a conta mestre do administrador.');
+      setTimeout(() => setActionError(null), 4000);
       return;
     }
-    if (!confirm(`Tem certeza que deseja excluir o usuário "${username}"?`)) return;
+    const confirmed = typeof window !== 'undefined' && window.confirm ? window.confirm(`Tem certeza que deseja excluir o usuário "${username}"?`) : true;
+    if (!confirmed) return;
 
     try {
       const res = await fetch(`/api/auth/users/${userId}`, { method: 'DELETE' });
-      if (res.ok) {
-        loadSecurityData();
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        await loadSecurityData();
+        setActionSuccess(`Usuário "${username}" removido com sucesso.`);
+        setTimeout(() => setActionSuccess(null), 3500);
+      } else {
+        setActionError(data.error || 'Erro ao excluir usuário.');
       }
     } catch (err) {
       console.error('Erro ao excluir usuário:', err);
+      setActionError('Erro de rede ao excluir usuário.');
     }
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isAdmin || !newUsername || !newPassword) return;
+    if (!isAdmin || !newUsername.trim() || !newPassword.trim() || isSubmitting) return;
     setActionError(null);
+    setIsSubmitting(true);
 
     try {
       const res = await fetch('/api/auth/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          username: newUsername,
-          name: newName,
-          email: newEmail,
-          password: newPassword,
+          username: newUsername.trim(),
+          name: newName.trim(),
+          email: newEmail.trim(),
+          password: newPassword.trim(),
           role: newRole,
         }),
       });
@@ -110,19 +132,23 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
         setNewEmail('');
         setNewPassword('');
         setNewRole('USER');
-        loadSecurityData();
-        setActionSuccess('Usuário cadastrado com sucesso!');
-        setTimeout(() => setActionSuccess(null), 3000);
+        await loadSecurityData();
+        setActionSuccess('Usuário cadastrado com sucesso no banco de dados!');
+        setTimeout(() => setActionSuccess(null), 3500);
       } else {
         setActionError(data.error || 'Erro ao criar usuário.');
       }
     } catch (err: any) {
       setActionError('Erro de conexão ao criar usuário.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleOpenEdit = (user: UserAccount) => {
+    setShowNewUserModal(false);
     setEditingUser(user);
+    setEditUsername(user.username || '');
     setEditName(user.name || '');
     setEditEmail(user.email || '');
     setEditRole(user.role || 'USER');
@@ -132,15 +158,19 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isAdmin || !editingUser) return;
+    if (!isAdmin || !editingUser || isSubmitting) return;
     setActionError(null);
+    setIsSubmitting(true);
 
     try {
       const payload: any = {
-        name: editName,
-        email: editEmail,
+        name: editName.trim(),
+        email: editEmail.trim(),
         role: editRole,
       };
+      if (editUsername.trim() && editUsername.trim().toLowerCase() !== editingUser.username.toLowerCase()) {
+        payload.username = editUsername.trim();
+      }
       if (editPassword.trim()) {
         payload.password = editPassword.trim();
       }
@@ -154,14 +184,16 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
       const data = await res.json();
       if (res.ok && data.success) {
         setEditingUser(null);
-        loadSecurityData();
-        setActionSuccess('Conta atualizada com sucesso!');
-        setTimeout(() => setActionSuccess(null), 3000);
+        await loadSecurityData();
+        setActionSuccess('Conta atualizada com sucesso no banco de dados!');
+        setTimeout(() => setActionSuccess(null), 3500);
       } else {
         setActionError(data.error || 'Erro ao atualizar usuário.');
       }
     } catch (err) {
       setActionError('Erro de conexão ao atualizar usuário.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -299,10 +331,7 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
                 </div>
                 {isAdmin && (
                   <button
-                    onClick={() => {
-                      setActionError(null);
-                      setShowNewUserModal(true);
-                    }}
+                    onClick={handleOpenNewUser}
                     className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-2 transition shadow-lg shadow-emerald-900/20"
                   >
                     <Plus className="w-4 h-4" />
@@ -501,16 +530,18 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
               <div className="flex justify-end gap-2 pt-3">
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={() => setShowNewUserModal(false)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs hover:bg-slate-700 transition"
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs hover:bg-slate-700 transition disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs hover:bg-emerald-500 font-medium transition shadow-lg shadow-emerald-900/20"
+                  disabled={isSubmitting}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-xs hover:bg-emerald-500 font-medium transition shadow-lg shadow-emerald-900/20 disabled:opacity-50"
                 >
-                  Criar Usuário
+                  {isSubmitting ? 'Cadastrando...' : 'Criar Usuário'}
                 </button>
               </div>
             </form>
@@ -536,42 +567,64 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
 
             <form onSubmit={handleUpdateUser} className="space-y-3">
               <div>
+                <label className="text-[11px] text-slate-400 block mb-1">Login (Nome de Usuário)*</label>
+                <input
+                  type="text"
+                  required
+                  disabled={isSubmitting || editingUser.username === 'admin'}
+                  value={editUsername}
+                  onChange={e => setEditUsername(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-blue-500 font-mono disabled:opacity-60"
+                  placeholder="ex: analista"
+                />
+                {editingUser.username === 'admin' && (
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">O login da conta mestre admin não pode ser alterado.</span>
+                )}
+              </div>
+              <div>
                 <label className="text-[11px] text-slate-400 block mb-1">Nome Completo</label>
                 <input
                   type="text"
+                  disabled={isSubmitting}
                   value={editName}
                   onChange={e => setEditName(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-blue-500 disabled:opacity-50"
                 />
               </div>
               <div>
                 <label className="text-[11px] text-slate-400 block mb-1">E-mail</label>
                 <input
                   type="email"
+                  disabled={isSubmitting}
                   value={editEmail}
                   onChange={e => setEditEmail(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-blue-500 disabled:opacity-50"
                 />
               </div>
               <div>
                 <label className="text-[11px] text-slate-400 block mb-1">Perfil (RBAC)</label>
                 <select
+                  disabled={isSubmitting || editingUser.username === 'admin'}
                   value={editRole}
                   onChange={e => setEditRole(e.target.value as any)}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-blue-500 disabled:opacity-60"
                 >
                   <option value="USER">Usuário (USER)</option>
                   <option value="OPERATOR">Operador (OPERATOR)</option>
                   <option value="ADMIN">Administrador (ADMIN)</option>
                 </select>
+                {editingUser.username === 'admin' && (
+                  <span className="text-[10px] text-slate-500 mt-0.5 block">O papel da conta mestre admin é fixo.</span>
+                )}
               </div>
               <div>
                 <label className="text-[11px] text-slate-400 block mb-1">Nova Senha (Opcional — deixar em branco para manter a atual)</label>
                 <input
                   type="password"
+                  disabled={isSubmitting}
                   value={editPassword}
                   onChange={e => setEditPassword(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-blue-500"
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-blue-500 disabled:opacity-50"
                   placeholder="Nova senha segura..."
                 />
               </div>
@@ -579,16 +632,18 @@ export const SecurityCenterModal: React.FC<SecurityCenterModalProps> = ({ curren
               <div className="flex justify-end gap-2 pt-3">
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={() => setEditingUser(null)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs hover:bg-slate-700 transition"
+                  className="px-4 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs hover:bg-slate-700 transition disabled:opacity-50"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-xs hover:bg-blue-500 font-medium transition shadow-lg shadow-blue-900/20"
+                  disabled={isSubmitting}
+                  className="px-4 py-2.5 rounded-xl bg-blue-600 text-white text-xs hover:bg-blue-500 font-medium transition shadow-lg shadow-blue-900/20 disabled:opacity-50"
                 >
-                  Salvar Alterações
+                  {isSubmitting ? 'Salvando...' : 'Salvar Alterações'}
                 </button>
               </div>
             </form>

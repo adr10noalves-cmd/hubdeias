@@ -1,0 +1,46 @@
+{
+  "users": [
+    {
+      "id": "usr_admin_01",
+      "username": "admin",
+      "name": "Administrador Mestre",
+      "email": "admin@hubdeias.local",
+      "role": "ADMIN",
+      "status": "active",
+      "passwordHash": "5d1d5c30fa91657fe694807616d468bc:7676f877b1a678b35f01bcdfc083ed84dc48f6f5a95ec1c4ab47a4f6891c9346489d5aa001bf88be8e3f69c5e8211d48e66b9da1d84d0004cc008a1dfbc0eaa1",
+      "createdAt": "2026-09-20T08:51:22.695Z",
+      "updatedAt": "2026-09-20T08:51:22.695Z",
+      "failedAttempts": 0,
+      "lockedUntil": null
+    },
+    {
+      "id": "usr_operador_01",
+      "username": "operador",
+      "name": "Operador Estratégico",
+      "email": "operador@hubdeias.local",
+      "role": "OPERATOR",
+      "status": "active",
+      "passwordHash": "e4f0d7695761a11d97b876f732c60b26:a84189194481c4e9bacbb7d64603a117cac90f7f671ce991b13e460db332e2d0a5b1c1e8d9f9bed17ac43483ced130a90c4fca71d66668a5b1b01040974b6ed3",
+      "createdAt": "2026-09-20T08:51:22.897Z",
+      "updatedAt": "2026-09-20T08:51:22.897Z",
+      "failedAttempts": 0,
+      "lockedUntil": null
+    },
+    {
+      "id": "usr_user_01",
+      "username": "usuario",
+      "name": "Usuário Padrão",
+      "email": "usuario@hubdeias.local",
+      "role": "USER",
+      "status": "active",
+      "passwordHash": "880e8337b4f4d576f02eded7f35dedb7:4c7792aa6e65ec20453d9c07be2e53226d693ec3f606f14aaf4618a980c1b29c5231a20dbe9c9fef12c55efd935f270005eb331c18ece27bcd4e39715f1595ab",
+      "createdAt": "2026-09-20T08:51:23.101Z",
+      "updatedAt": "2026-09-20T08:51:23.101Z",
+      "failedAttempts": 0,
+      "lockedUntil": null
+    }
+  ],
+  "sessions": [],
+  "events": [],
+  "passkeys": []
+}

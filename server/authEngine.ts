@@ -131,6 +131,7 @@ export function loadDB(): DatabaseSchema {
   if (!db.events) db.events = [];
   if (!db.passkeys) db.passkeys = [];
 
+  let modified = false;
   for (const acc of defaultAccounts) {
     let existing = db.users.find(u => u.username.toLowerCase() === acc.username.toLowerCase());
 
@@ -150,20 +151,28 @@ export function loadDB(): DatabaseSchema {
         failedAttempts: 0,
         lockedUntil: null,
       });
+      modified = true;
     } else {
       if (!existing.passwordHash) {
         const { salt, hash } = hashPassword(acc.pass);
         existing.passwordHash = `${salt}:${hash}`;
+        modified = true;
       }
     }
   }
 
-  saveDB(db);
+  if (modified || !fs.existsSync(DB_FILE)) {
+    saveDB(db);
+  }
   return db;
 }
 
 export function saveDB(db: DatabaseSchema): void {
   try {
+    const dir = path.dirname(DB_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
     fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
   } catch (err) {
     console.error('Erro ao salvar banco de segurança:', err);

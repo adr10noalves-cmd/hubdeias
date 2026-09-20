@@ -38,17 +38,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return;
     }
 
-    if (db.users.some((u: any) => u.username.toLowerCase() === username.toLowerCase())) {
+    const cleanUsername = String(username).trim();
+    const cleanPassword = String(password).trim();
+
+    if (!cleanUsername || !cleanPassword) {
+      res.status(400).json({ success: false, error: 'Usuário e senha não podem ser vazios.' });
+      return;
+    }
+
+    if (db.users.some((u: any) => u.username.toLowerCase() === cleanUsername.toLowerCase())) {
       res.status(400).json({ success: false, error: 'Nome de usuário já existe.' });
       return;
     }
 
-    const { salt, hash } = hashPassword(password);
+    const { salt, hash } = hashPassword(cleanPassword);
     const newUser: UserAccount = {
-      id: 'usr_' + crypto.randomBytes(4).toString('hex'),
-      username: username.trim(),
-      name: name?.trim() || username,
-      email: email?.trim() || `${username}@hubdeias.local`,
+      id: 'usr_' + crypto.randomBytes(6).toString('hex'),
+      username: cleanUsername,
+      name: name?.trim() || cleanUsername,
+      email: email?.trim() || `${cleanUsername}@hubdeias.local`,
       role: role || 'USER',
       status: 'active',
       passwordHash: `${salt}:${hash}`,
@@ -61,13 +69,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     saveDB(db);
 
     logSecurityEventServer({
+      userId: newUser.id,
       username: newUser.username,
       event: 'USUARIO_CRIADO',
       severity: 'info',
-      metadata: `Usuário ${newUser.username} criado (${newUser.role}).`,
+      metadata: `Novo usuário ${newUser.username} cadastrado com perfil ${newUser.role}.`,
     });
 
-    res.status(200).json({ success: true, user: { id: newUser.id, username: newUser.username, role: newUser.role } });
+    res.status(200).json({
+      success: true,
+      user: {
+        id: newUser.id,
+        username: newUser.username,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+        status: newUser.status,
+        createdAt: newUser.createdAt,
+      },
+    });
     return;
   }
 
