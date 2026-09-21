@@ -624,7 +624,9 @@ export async function processAssistantMessage(
   }
 
   // PASSO 11: CONTINUAR O FLUXO COM PRÓXIMAS AÇÕES SUGERIDAS (MANTENDO O USUÁRIO NO CONTROLE)
+  // O Motor de Iniciativa considera o perfil: Iniciante (orientação/aprendizagem), Intermediário (equilibrado), Avançado (objetivo)
   const suggestedActions: AssistantEngineResponse['suggestedActions'] = [];
+  const userLevel = currentAdaptiveProfile?.aiExperienceLevel || 'INTERMEDIÁRIO';
 
   if (currentProject) {
     suggestedActions.push({
@@ -636,11 +638,18 @@ export async function processAssistantMessage(
       label: '🧪 Simular Próximo Passo',
       actionType: 'SWITCH_TO_SIMULATION',
     });
-    suggestedActions.push({
-      label: '📝 Registrar Aprendizado no Diário',
-      actionType: 'OPEN_LEARNING_MODAL',
-      target: currentProject.id,
-    });
+    if (userLevel === 'INICIANTE') {
+      suggestedActions.push({
+        label: '❓ O que posso fazer nesta etapa?',
+        actionType: 'ASK_WHAT_CAN_I_DO',
+      });
+    } else {
+      suggestedActions.push({
+        label: '📝 Registrar Aprendizado no Diário',
+        actionType: 'OPEN_LEARNING_MODAL',
+        target: currentProject.id,
+      });
+    }
   } else if (currentRoute === 'catalog') {
     suggestedActions.push({
       label: '➕ Cadastrar Nova IA',
@@ -650,23 +659,41 @@ export async function processAssistantMessage(
       label: '⚖️ Comparar IAs',
       actionType: 'OPEN_COMPARE',
     });
-    suggestedActions.push({
-      label: '🚀 Ir para Projetos',
-      actionType: 'NAVIGATE_PROJECTS',
-    });
+    if (userLevel === 'INICIANTE') {
+      suggestedActions.push({
+        label: '📚 Ver Recursos de Estudo',
+        actionType: 'NAVIGATE_STUDIES',
+      });
+    } else {
+      suggestedActions.push({
+        label: '🚀 Ir para Projetos',
+        actionType: 'NAVIGATE_PROJECTS',
+      });
+    }
   } else {
     suggestedActions.push({
       label: '🚀 Ir para Projetos',
       actionType: 'NAVIGATE_PROJECTS',
     });
-    suggestedActions.push({
-      label: '📚 Explorar Catálogo',
-      actionType: 'NAVIGATE_CATALOG',
-    });
-    suggestedActions.push({
-      label: '📋 Planejar Construção',
-      actionType: 'SWITCH_TO_PLANNING',
-    });
+    if (userLevel === 'INICIANTE') {
+      suggestedActions.push({
+        label: '📚 Ver Recursos de Estudo',
+        actionType: 'NAVIGATE_STUDIES',
+      });
+      suggestedActions.push({
+        label: '❓ O que posso fazer aqui no Hub?',
+        actionType: 'ASK_WHAT_CAN_I_DO',
+      });
+    } else {
+      suggestedActions.push({
+        label: '📚 Explorar Catálogo',
+        actionType: 'NAVIGATE_CATALOG',
+      });
+      suggestedActions.push({
+        label: '📋 Planejar Construção',
+        actionType: 'SWITCH_TO_PLANNING',
+      });
+    }
   }
 
   return {

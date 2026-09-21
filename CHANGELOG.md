@@ -25,6 +25,9 @@ Implementação do sistema dinâmico de adaptação do comportamento e participa
   - A preferência explícita mais recente prevalece dinamicamente.
 - **Reutilização da Estrutura de Memória e Perfil Existente**:
   - Armazenamento persistido integrado às funções existentes (`getUserAdaptiveProfile` e `saveUserAdaptiveProfile` no `authService.ts`), sem criação de sistemas paralelos ou redundantes.
+- **Princípio Fundamental & Dimensões de Participação**:
+  - A Central não apenas personaliza o que diz, mas **como participa**: calibra quanto explica, quando pergunta, quando sugere, quando ensina, quando se aprofunda, quando fica em silêncio e quanto de autonomia operacional assume.
+  - **Motor de Iniciativa Personalizado**: Sugestões de próximas ações e proatividade calibradas por nível (Iniciante: acompanhamento próximo e recursos de estudo; Intermediário: equilíbrio estratégico e maturidade; Avançado: objetividade e foco em execução sem ruído invasivo).
 - **Transparência e Controle Visual**:
   - Nova aba **"👤 Perfil Adaptativo de IA"** no modal de memória operacional (`AssistantMemoryModal.tsx`), permitindo visualizar profundidade, estilo e proatividade ativos, além de alternar o nível a qualquer momento.
   - Indicador dinâmico no cabeçalho do `CentralAICoordinator.tsx` com o nível atual e atalho direto para recalibração.
