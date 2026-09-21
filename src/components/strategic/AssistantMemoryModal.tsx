@@ -13,18 +13,28 @@ import {
   ExternalLink,
   ShieldCheck,
   RefreshCw,
+  UserCheck,
+  Sparkles,
+  BookOpen,
+  Sliders,
 } from 'lucide-react';
 import {
   IdeaItem,
   StudyItem,
   OperationalExecutionRecord,
   StructuredAssistantContext,
+  UserAdaptiveProfile,
+  AIExperienceLevel,
+  ExplanationDepth,
+  PreferredInteractionStyle,
+  ProactivityLevel,
 } from '../../types';
 import {
   getExecutionRecords,
   deleteExecutionRecord,
 } from '../../services/assistant/memoryManager';
 import { calculateOperationalMetrics } from '../../services/assistant/metricsManager';
+import { getUserAdaptiveProfile, saveUserAdaptiveProfile } from '../../services/authService';
 
 interface AssistantMemoryModalProps {
   isOpen: boolean;
@@ -43,20 +53,44 @@ export const AssistantMemoryModal: React.FC<AssistantMemoryModalProps> = ({
   studies,
   onOpenIdeaDetail,
 }) => {
-  const [activeTab, setActiveTab] = useState<'active_context' | 'history' | 'metrics'>('active_context');
+  const [activeTab, setActiveTab] = useState<'active_context' | 'history' | 'metrics' | 'adaptive_profile'>('active_context');
   const [records, setRecords] = useState<OperationalExecutionRecord[]>([]);
   const [loadingRecords, setLoadingRecords] = useState(false);
   const [filterType, setFilterType] = useState<'ALL' | 'SIMULATION' | 'REAL'>('ALL');
+  const [adaptiveProfile, setAdaptiveProfile] = useState<UserAdaptiveProfile | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const loadHistory = async () => {
     setLoadingRecords(true);
     try {
-      const data = await getExecutionRecords();
+      const [data, profile] = await Promise.all([
+        getExecutionRecords(),
+        getUserAdaptiveProfile(),
+      ]);
       setRecords(data);
+      setAdaptiveProfile(profile);
     } catch (err) {
       console.warn('[AssistantMemoryModal] Erro ao carregar histórico:', err);
     } finally {
       setLoadingRecords(false);
+    }
+  };
+
+  const handleUpdateExperience = async (level: AIExperienceLevel) => {
+    setSavingProfile(true);
+    try {
+      const updated = await saveUserAdaptiveProfile({
+        aiExperienceLevel: level,
+        explanationDepth: level === 'INICIANTE' ? 'detalhada' : level === 'AVANÇADO' ? 'objetiva' : 'equilibrada',
+        preferredInteractionStyle: level === 'INICIANTE' ? 'orientador' : level === 'AVANÇADO' ? 'direto' : 'estrategico',
+        proactivityLevel: level === 'INICIANTE' ? 'alto' : level === 'AVANÇADO' ? 'baixo' : 'equilibrado',
+        lastExplicitAdjustment: `Atualizado no painel de memória para ${level}`,
+      });
+      setAdaptiveProfile(updated);
+    } catch (err) {
+      console.error('Erro ao atualizar perfil adaptativo:', err);
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -146,6 +180,21 @@ export const AssistantMemoryModal: React.FC<AssistantMemoryModalProps> = ({
             }`}
           >
             📊 Métricas & ROI Operacional
+          </button>
+          <button
+            onClick={() => setActiveTab('adaptive_profile')}
+            className={`py-3 px-3 border-b-2 font-medium transition-colors flex items-center gap-1.5 ${
+              activeTab === 'adaptive_profile'
+                ? 'border-cyan-400 text-cyan-300'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <span>👤 Perfil Adaptativo de IA</span>
+            {adaptiveProfile?.aiExperienceLevel && (
+              <span className="px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 font-mono text-[10px]">
+                {adaptiveProfile.aiExperienceLevel}
+              </span>
+            )}
           </button>
         </div>
 
@@ -386,6 +435,179 @@ export const AssistantMemoryModal: React.FC<AssistantMemoryModalProps> = ({
                     {metrics.roiCalculation.explanation}
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* ABA 4: PERFIL ADAPTATIVO DE IA */}
+          {activeTab === 'adaptive_profile' && (
+            <div className="space-y-4">
+              {/* Princípio de Conduta */}
+              <div className="p-3.5 rounded-xl bg-gradient-to-r from-indigo-950/40 via-slate-900 to-cyan-950/40 border border-indigo-500/30 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-amber-400" />
+                    Princípio Fundamental de Personalização
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 font-mono">
+                    Dinâmico & Não-Rígido
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  A Central de IA não apenas ajusta o que diz, mas <strong>como participa</strong>: calibra quanto explica, quando pergunta, quando sugere, quando ensina, quando se aprofunda, quando fica em silêncio e quanta autonomia operacional assume.
+                </p>
+              </div>
+
+              {/* Seletor dos 3 Níveis */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-slate-200 uppercase tracking-wider">
+                    Nível de Experiência Declarado com IA
+                  </span>
+                  {savingProfile && (
+                    <span className="text-[10px] text-cyan-400 animate-pulse flex items-center gap-1">
+                      <RefreshCw className="w-3 h-3 animate-spin" /> Salvando perfil...
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                  {/* INICIANTE */}
+                  <button
+                    onClick={() => handleUpdateExperience('INICIANTE')}
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                      adaptiveProfile?.aiExperienceLevel === 'INICIANTE'
+                        ? 'bg-emerald-950/40 border-emerald-500/60 shadow-lg shadow-emerald-950/30'
+                        : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-bold text-white text-xs flex items-center gap-1">
+                        🌱 INICIANTE
+                      </span>
+                      {adaptiveProfile?.aiExperienceLevel === 'INICIANTE' && (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-300 mb-2">
+                      Estou começando e quero orientação mais detalhada.
+                    </p>
+                    <div className="pt-2 border-t border-slate-800/80 text-[10px] text-slate-400 space-y-1">
+                      <div>• Explica conceitos antes de jargões</div>
+                      <div>• Ensina o passo a passo enquanto executa</div>
+                      <div>• Sugere próximos passos e antecipa dúvidas</div>
+                      <div>• Acompanhamento acolhedor e próximo</div>
+                    </div>
+                  </button>
+
+                  {/* INTERMEDIÁRIO */}
+                  <button
+                    onClick={() => handleUpdateExperience('INTERMEDIÁRIO')}
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                      adaptiveProfile?.aiExperienceLevel === 'INTERMEDIÁRIO'
+                        ? 'bg-indigo-950/40 border-indigo-500/60 shadow-lg shadow-indigo-950/30'
+                        : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-bold text-white text-xs flex items-center gap-1">
+                        ⚡ INTERMEDIÁRIO
+                      </span>
+                      {adaptiveProfile?.aiExperienceLevel === 'INTERMEDIÁRIO' && (
+                        <CheckCircle2 className="w-4 h-4 text-indigo-400" />
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-300 mb-2">
+                      Já utilizo IAs e conheço os principais conceitos.
+                    </p>
+                    <div className="pt-2 border-t border-slate-800/80 text-[10px] text-slate-400 space-y-1">
+                      <div>• Equilíbrio entre ação e fundamentação</div>
+                      <div>• Aprofundamento sob sua demanda</div>
+                      <div>• Trade-offs e alternativas de ferramentas</div>
+                      <div>• Autonomia em operações autorizadas</div>
+                    </div>
+                  </button>
+
+                  {/* AVANÇADO */}
+                  <button
+                    onClick={() => handleUpdateExperience('AVANÇADO')}
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                      adaptiveProfile?.aiExperienceLevel === 'AVANÇADO'
+                        ? 'bg-cyan-950/40 border-cyan-500/60 shadow-lg shadow-cyan-950/30'
+                        : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-bold text-white text-xs flex items-center gap-1">
+                        🚀 AVANÇADO
+                      </span>
+                      {adaptiveProfile?.aiExperienceLevel === 'AVANÇADO' && (
+                        <CheckCircle2 className="w-4 h-4 text-cyan-400" />
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-300 mb-2">
+                      Tenho experiência com IA, APIs e automações e prefiro interação direta.
+                    </p>
+                    <div className="pt-2 border-t border-slate-800/80 text-[10px] text-slate-400 space-y-1">
+                      <div>• Alta densidade técnica e máxima objetividade</div>
+                      <div>• Zero explicações conceituais básicas</div>
+                      <div>• Arquitetura, contexto, pipelines e latência</div>
+                      <div>• Maior autonomia em tarefas de baixo risco</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Detalhes de Calibração Ativa */}
+              <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                <span className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Sliders className="w-3.5 h-3.5" />
+                  Calibração da Participação do Assistente
+                </span>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                  <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
+                    <span className="block text-[10px] text-slate-500 uppercase">Profundidade</span>
+                    <span className="text-xs font-bold text-slate-200 capitalize">
+                      {adaptiveProfile?.explanationDepth || 'Equilibrada'}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
+                    <span className="block text-[10px] text-slate-500 uppercase">Estilo de Conduta</span>
+                    <span className="text-xs font-bold text-slate-200 capitalize">
+                      {adaptiveProfile?.preferredInteractionStyle || 'Estratégico'}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
+                    <span className="block text-[10px] text-slate-500 uppercase">Proatividade</span>
+                    <span className="text-xs font-bold text-slate-200 capitalize">
+                      {adaptiveProfile?.proactivityLevel || 'Equilibrado'}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
+                    <span className="block text-[10px] text-slate-500 uppercase">Persistência</span>
+                    <span className="text-xs font-bold text-emerald-400">
+                      Perfil Existente
+                    </span>
+                  </div>
+                </div>
+
+                {adaptiveProfile?.lastExplicitAdjustment && (
+                  <div className="p-2 rounded-lg bg-slate-900/60 border border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+                    <span><strong>Último ajuste dinâmico:</strong> {adaptiveProfile.lastExplicitAdjustment}</span>
+                    <span className="text-[10px] font-mono text-cyan-400">Em vigor</span>
+                  </div>
+                )}
+
+                <div className="p-2.5 rounded-lg bg-indigo-950/20 border border-indigo-800/40 text-[11px] text-slate-300 flex items-start gap-2">
+                  <BookOpen className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5" />
+                  <p>
+                    <strong>Adaptação contínua na conversa:</strong> Você também pode calibrar em tempo real no chat falando frases como <em>"Explique como se eu fosse iniciante"</em>, <em>"Não precisa explicar tanto"</em> ou <em>"Quero entender por que você fez isso"</em>. A sua preferência mais recente sempre prevalecerá.
+                  </p>
+                </div>
               </div>
             </div>
           )}

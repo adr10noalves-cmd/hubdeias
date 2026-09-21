@@ -610,6 +610,21 @@ export type UserRole = 'ADMIN' | 'OPERATOR' | 'USER' | 'GUEST';
 
 export type UserStatus = 'active' | 'suspended' | 'locked';
 
+// --- PERFIL ADAPTATIVO DO USUÁRIO COM IA ---
+export type AIExperienceLevel = 'INICIANTE' | 'INTERMEDIÁRIO' | 'AVANÇADO';
+export type ExplanationDepth = 'detalhada' | 'equilibrada' | 'objetiva';
+export type PreferredInteractionStyle = 'orientador' | 'estrategico' | 'direto';
+export type ProactivityLevel = 'alto' | 'equilibrado' | 'baixo';
+
+export interface UserAdaptiveProfile {
+  aiExperienceLevel: AIExperienceLevel;
+  explanationDepth: ExplanationDepth;
+  preferredInteractionStyle: PreferredInteractionStyle;
+  proactivityLevel: ProactivityLevel;
+  lastExplicitAdjustment?: string;
+  updatedAt: string;
+}
+
 export interface UserAccount {
   id: string;
   username: string;
@@ -618,6 +633,7 @@ export interface UserAccount {
   role: UserRole;
   status: UserStatus;
   passwordHash: string; // Armazenado com salt/hash seguro
+  adaptiveProfile?: UserAdaptiveProfile; // Perfil adaptativo de IA do usuário
   createdAt: string;
   updatedAt: string;
   lastLogin?: string;
@@ -657,6 +673,7 @@ export interface AuthSession {
   userId: string;
   username: string;
   role: UserRole;
+  adaptiveProfile?: UserAdaptiveProfile;
   createdAt: string;
   expiresAt: string;
   revokedAt?: string | null;

@@ -1,4 +1,19 @@
-import { AssistantIntent, IdeaItem, ProjectHubItem } from '../../types';
+import { 
+  AssistantIntent, 
+  IdeaItem, 
+  ProjectHubItem,
+  AIExperienceLevel,
+  ExplanationDepth,
+  PreferredInteractionStyle,
+} from '../../types';
+
+export interface AdaptiveAdjustment {
+  type: 'SET_EXPERIENCE_LEVEL' | 'REDUCE_EXPLANATION' | 'INCREASE_EXPLANATION' | 'EXPLAIN_LIKE_BEGINNER';
+  targetLevel?: AIExperienceLevel;
+  targetDepth?: ExplanationDepth;
+  targetStyle?: PreferredInteractionStyle;
+  reason: string;
+}
 
 export interface IntentAnalysisResult {
   intent: AssistantIntent;
@@ -33,6 +48,7 @@ export interface IntentAnalysisResult {
     name: string;
     params: any;
   };
+  adaptiveAdjustment?: AdaptiveAdjustment;
   reasoning: string;
 }
 
@@ -361,12 +377,130 @@ export function analyzeUserIntent(
     }
   }
 
+  // 5.5. Reconhecimento de Perfil Adaptativo e Ajustes Dinâmicos
+  let adaptiveAdjustment: AdaptiveAdjustment | undefined;
+
+  // Detecção de definição explícita de nível
+  const isDeclaringIniciante =
+    lower === 'iniciante' ||
+    lower.startsWith('iniciante') ||
+    lower.includes('sou iniciante') ||
+    lower.includes('nível iniciante') ||
+    lower.includes('nivel iniciante') ||
+    lower.includes('estou começando e quero orientação') ||
+    lower.includes('mudar para iniciante') ||
+    lower.includes('ajustar para iniciante');
+
+  const isDeclaringIntermediario =
+    lower === 'intermediário' ||
+    lower === 'intermediario' ||
+    lower.startsWith('intermediário') ||
+    lower.startsWith('intermediario') ||
+    lower.includes('sou intermediário') ||
+    lower.includes('sou intermediario') ||
+    lower.includes('nível intermediário') ||
+    lower.includes('nivel intermediario') ||
+    lower.includes('já utilizo ias e conheço os principais conceitos') ||
+    lower.includes('mudar para intermediário') ||
+    lower.includes('ajustar para intermediário');
+
+  const isDeclaringAvancado =
+    lower === 'avançado' ||
+    lower === 'avancado' ||
+    lower.startsWith('avançado') ||
+    lower.startsWith('avancado') ||
+    lower.includes('sou avançado') ||
+    lower.includes('sou avancado') ||
+    lower.includes('nível avançado') ||
+    lower.includes('nivel avancado') ||
+    lower.includes('tenho experiência com ia, ferramentas') ||
+    lower.includes('mudar para avançado') ||
+    lower.includes('ajustar para avançado');
+
+  if (isDeclaringIniciante) {
+    adaptiveAdjustment = {
+      type: 'SET_EXPERIENCE_LEVEL',
+      targetLevel: 'INICIANTE',
+      targetDepth: 'detalhada',
+      targetStyle: 'orientador',
+      reason: 'Definição explícita de perfil de IA como INICIANTE (orientador, passo a passo, conceitos explicados).',
+    };
+  } else if (isDeclaringIntermediario) {
+    adaptiveAdjustment = {
+      type: 'SET_EXPERIENCE_LEVEL',
+      targetLevel: 'INTERMEDIÁRIO',
+      targetDepth: 'equilibrada',
+      targetStyle: 'estrategico',
+      reason: 'Definição explícita de perfil de IA como INTERMEDIÁRIO (estratégico, equilibrado, decisões fundamentadas).',
+    };
+  } else if (isDeclaringAvancado) {
+    adaptiveAdjustment = {
+      type: 'SET_EXPERIENCE_LEVEL',
+      targetLevel: 'AVANÇADO',
+      targetDepth: 'objetiva',
+      targetStyle: 'direto',
+      reason: 'Definição explícita de perfil de IA como AVANÇADO (direto, focado em arquitetura e alta eficiência).',
+    };
+  } else if (
+    lower.includes('explique isso como se eu estivesse começando') ||
+    lower.includes('como se eu estivesse comecando') ||
+    lower.includes('me explique como um iniciante') ||
+    lower.includes('explique como para um iniciante') ||
+    lower.includes('explique como se eu fosse leigo') ||
+    lower.includes('sou leigo nisso') ||
+    lower.includes('explique do zero')
+  ) {
+    adaptiveAdjustment = {
+      type: 'EXPLAIN_LIKE_BEGINNER',
+      targetDepth: 'detalhada',
+      targetStyle: 'orientador',
+      reason: 'Ajuste dinâmico imediato: usuário solicitou explicação acessível e detalhada no nível iniciante.',
+    };
+  } else if (
+    lower.includes('não precisa explicar tanto') ||
+    lower.includes('nao precisa explicar tanto') ||
+    lower.includes('menos explicação') ||
+    lower.includes('menos explicacao') ||
+    lower.includes('vá direto ao ponto') ||
+    lower.includes('va direto ao ponto') ||
+    lower.includes('seja mais direto') ||
+    lower.includes('seja sucinto') ||
+    lower.includes('menos texto') ||
+    lower.includes('menos prolixo') ||
+    lower.includes('sem rodeios')
+  ) {
+    adaptiveAdjustment = {
+      type: 'REDUCE_EXPLANATION',
+      targetDepth: 'objetiva',
+      targetStyle: 'direto',
+      reason: 'Ajuste dinâmico imediato: usuário solicitou objetividade máxima e menor profundidade de explicação.',
+    };
+  } else if (
+    lower.includes('quero entender por que você fez isso') ||
+    lower.includes('quero entender por que voce fez isso') ||
+    lower.includes('por que você tomou essa decisão') ||
+    lower.includes('por que voce tomou essa decisao') ||
+    lower.includes('me explique o motivo') ||
+    lower.includes('justifique essa escolha') ||
+    lower.includes('por que essa decisão')
+  ) {
+    adaptiveAdjustment = {
+      type: 'INCREASE_EXPLANATION',
+      targetDepth: 'detalhada',
+      reason: 'Ajuste dinâmico imediato: usuário solicitou justificativa e fundamentação detalhada da decisão tomada.',
+    };
+  }
+
   // 6. Classificação da Intenção
   let intent: AssistantIntent = 'pergunta';
   let confidence = 0.85;
   let reasoning = 'Consulta ou diálogo com o Auxiliar Mestre do Hub.';
 
-  if (isAskingToRegisterAI) {
+  if (adaptiveAdjustment?.type === 'SET_EXPERIENCE_LEVEL') {
+    intent = 'atualizacao_projeto';
+    confidence = 0.98;
+    reasoning = `Usuário definiu seu nível de experiência com IA como ${adaptiveAdjustment.targetLevel}.`;
+  } else if (isAskingToRegisterAI) {
     intent = 'solicitacao_execucao';
     confidence = 0.95;
     reasoning = `Usuário solicitou o cadastro autônomo da IA "${extractedAICandidate?.name}".`;
@@ -420,6 +554,7 @@ export function analyzeUserIntent(
     isAskingToRegisterAI,
     extractedAICandidate,
     suggestedToolCall,
+    adaptiveAdjustment,
     reasoning,
   };
 }

@@ -10,7 +10,15 @@ import {
   limit 
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { UserAccount, SecurityEvent, AuthSession, PasskeyCredential, UserRole } from '../types';
+import { 
+  UserAccount, 
+  SecurityEvent, 
+  AuthSession, 
+  PasskeyCredential, 
+  UserRole,
+  UserAdaptiveProfile,
+  AIExperienceLevel,
+} from '../types';
 
 const CURRENT_SESSION_KEY = 'hub_de_ias_session_token';
 const USERS_CACHE_KEY = 'hub_de_ias_users_cache_v3';
@@ -530,6 +538,123 @@ export function setCurrentSession(session: AuthSession): void {
   localStorage.setItem(CURRENT_SESSION_KEY, serialized);
 }
 
+export const ADAPTIVE_PROFILE_STORAGE_KEY = 'hub_assistant_adaptive_profile';
+
+export function getDefaultAdaptiveProfile(level: AIExperienceLevel = 'INTERMEDIÁRIO'): UserAdaptiveProfile {
+  switch (level) {
+    case 'INICIANTE':
+      return {
+        aiExperienceLevel: 'INICIANTE',
+        explanationDepth: 'detalhada',
+        preferredInteractionStyle: 'orientador',
+        proactivityLevel: 'alto',
+        updatedAt: new Date().toISOString(),
+      };
+    case 'AVANÇADO':
+      return {
+        aiExperienceLevel: 'AVANÇADO',
+        explanationDepth: 'objetiva',
+        preferredInteractionStyle: 'direto',
+        proactivityLevel: 'baixo',
+        updatedAt: new Date().toISOString(),
+      };
+    case 'INTERMEDIÁRIO':
+    default:
+      return {
+        aiExperienceLevel: 'INTERMEDIÁRIO',
+        explanationDepth: 'equilibrada',
+        preferredInteractionStyle: 'estrategico',
+        proactivityLevel: 'equilibrado',
+        updatedAt: new Date().toISOString(),
+      };
+  }
+}
+
+export async function getUserAdaptiveProfile(userId?: string): Promise<UserAdaptiveProfile | null> {
+  // 1. Verificar sessão ativa
+  const session = getCurrentSession();
+  const targetId = userId || session?.userId;
+
+  if (session?.adaptiveProfile && (!targetId || targetId === session.userId)) {
+    return session.adaptiveProfile;
+  }
+
+  // 2. Verificar cache local rápido
+  try {
+    const localRaw = localStorage.getItem(ADAPTIVE_PROFILE_STORAGE_KEY);
+    if (localRaw) {
+      const parsed = JSON.parse(localRaw);
+      if (parsed?.aiExperienceLevel) return parsed;
+    }
+  } catch {}
+
+  // 3. Verificar usuário registrado em cache ou Firestore
+  if (targetId) {
+    try {
+      const users = await getAllUsers();
+      const user = users.find((u) => u.id === targetId || u.username === session?.username);
+      if (user?.adaptiveProfile) {
+        try {
+          localStorage.setItem(ADAPTIVE_PROFILE_STORAGE_KEY, JSON.stringify(user.adaptiveProfile));
+        } catch {}
+        return user.adaptiveProfile;
+      }
+    } catch {}
+  }
+
+  return null;
+}
+
+export async function saveUserAdaptiveProfile(
+  profileData: Partial<UserAdaptiveProfile> & { aiExperienceLevel?: AIExperienceLevel },
+  userId?: string
+): Promise<UserAdaptiveProfile> {
+  const session = getCurrentSession();
+  const targetId = userId || session?.userId || 'usr_default';
+
+  const existing = await getUserAdaptiveProfile(targetId);
+  const baseLevel = profileData.aiExperienceLevel || existing?.aiExperienceLevel || 'INTERMEDIÁRIO';
+  const defaults = getDefaultAdaptiveProfile(baseLevel);
+
+  const updated: UserAdaptiveProfile = {
+    ...defaults,
+    ...(existing || {}),
+    ...profileData,
+    aiExperienceLevel: baseLevel,
+    updatedAt: new Date().toISOString(),
+  };
+
+  // 1. Armazenamento local imediato (funciona offline e para convidados)
+  try {
+    localStorage.setItem(ADAPTIVE_PROFILE_STORAGE_KEY, JSON.stringify(updated));
+  } catch {}
+
+  // 2. Atualizar sessão ativa
+  if (session && (!userId || userId === session.userId)) {
+    const updatedSession: AuthSession = {
+      ...session,
+      adaptiveProfile: updated,
+    };
+    setCurrentSession(updatedSession);
+  }
+
+  // 3. Atualizar UserAccount no Firestore e cache de contas
+  try {
+    const users = await getAllUsers();
+    const userIndex = users.findIndex((u) => u.id === targetId || (session?.username && u.username === session.username));
+    if (userIndex >= 0) {
+      users[userIndex].adaptiveProfile = updated;
+      users[userIndex].updatedAt = new Date().toISOString();
+      setCachedUsers(users);
+      await setDoc(doc(db, 'users', users[userIndex].id), users[userIndex], { merge: true });
+    }
+  } catch (err) {
+    console.warn('[Auth] Erro ao sincronizar perfil adaptativo no Firestore:', err);
+  }
+
+  return updated;
+}
+
 export async function clearCurrentSession(): Promise<void> {
   const session = getCurrentSession();
   if (session) {
@@ -660,6 +785,7 @@ export async function authenticateUser(
       userId: user.id,
       username: user.username,
       role: user.role,
+      adaptiveProfile: user.adaptiveProfile,
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 8 * 3600000).toISOString(), // 8 horas
       device: navigator.userAgent.substring(0, 80),

@@ -32,12 +32,15 @@ import {
   AssistantMode,
   TaskPlan,
   ProjectHubItem,
-  UserRole
+  UserRole,
+  UserAdaptiveProfile,
+  AIExperienceLevel,
 } from '../types';
 import { 
   processAssistantMessage, 
   AssistantEngineResponse 
 } from '../services/assistant/assistantEngine';
+import { getUserAdaptiveProfile, saveUserAdaptiveProfile } from '../services/authService';
 import { AssistantMemoryModal } from './strategic/AssistantMemoryModal';
 import { ProjectLearningModal } from './strategic/ProjectLearningModal';
 import { OrchestratorSettingsModal } from './strategic/OrchestratorSettingsModal';
@@ -153,6 +156,7 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
   const [isLearningModalOpen, setIsLearningModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [activeLearningIdea, setActiveLearningIdea] = useState<IdeaItem | null>(null);
+  const [adaptiveProfile, setAdaptiveProfile] = useState<UserAdaptiveProfile | null>(null);
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -169,6 +173,37 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
       timestamp: new Date(),
     }
   ]);
+
+  // Carrega o perfil adaptativo existente do usuário no Hub
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        const prof = await getUserAdaptiveProfile();
+        setAdaptiveProfile(prof);
+
+        // Se ainda não existir perfil cadastrado ou se o nível ainda não foi informado
+        if (!prof || !prof.aiExperienceLevel) {
+          setMessages([
+            {
+              id: 'msg-init-adaptive',
+              role: 'assistant',
+              content: 'Olá! Sou o **Auxiliar Mestre do Hub 2.0**.\n\nAntes de começarmos, qual é o seu nível de experiência com IA?\n\n- **INICIANTE**: Estou começando e quero orientação mais detalhada.\n- **INTERMEDIÁRIO**: Já utilizo IAs e conheço os principais conceitos.\n- **AVANÇADO**: Tenho experiência com IA, ferramentas, APIs, automações ou desenvolvimento e prefiro uma interação mais direta.',
+              mode: 'CONVERSATION',
+              suggestedActions: [
+                { label: '🌱 INICIANTE — Quero orientação detalhada', actionType: 'SET_AI_EXPERIENCE', payload: 'INICIANTE' },
+                { label: '⚡ INTERMEDIÁRIO — Conheço os conceitos', actionType: 'SET_AI_EXPERIENCE', payload: 'INTERMEDIÁRIO' },
+                { label: '🚀 AVANÇADO — Interação direta e técnica', actionType: 'SET_AI_EXPERIENCE', payload: 'AVANÇADO' },
+              ],
+              timestamp: new Date(),
+            }
+          ]);
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar perfil adaptativo no CentralAICoordinator:', e);
+      }
+    }
+    loadProfile();
+  }, []);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -222,6 +257,7 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
         currentSection,
         currentProject: activeProject && 'status' in activeProject ? (activeProject as ProjectHubItem) : currentProject,
         currentUserRole,
+        adaptiveProfile: adaptiveProfile || undefined,
         navigationHandlers: {
           navigateToView: (view) => {
             if (onChangeView) onChangeView(view);
@@ -283,6 +319,11 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
       setMessages((prev) => [...prev, assistantMsg]);
       setStatus('SPEAKING');
       setTimeout(() => setStatus('ONLINE'), 3000);
+
+      // Atualiza o perfil adaptativo local caso tenha ocorrido calibração na interação
+      getUserAdaptiveProfile().then((fresh) => {
+        if (fresh) setAdaptiveProfile(fresh);
+      }).catch(() => {});
     } catch (err: any) {
       console.error('[CentralAICoordinator handleSend Error]:', err);
       setStatus('ERROR');
@@ -303,7 +344,15 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
   };
 
   const handleActionClick = async (actionType: string, target?: string, payload?: any) => {
-    if (actionType === 'ASK_WHAT_CAN_I_DO') {
+    if (actionType === 'SET_AI_EXPERIENCE' && payload) {
+      const level = payload as AIExperienceLevel;
+      const promptMap: Record<AIExperienceLevel, string> = {
+        INICIANTE: 'Meu nível de experiência com IA é Iniciante. Estou começando e quero orientação mais detalhada.',
+        INTERMEDIÁRIO: 'Meu nível de experiência com IA é Intermediário. Já utilizo IAs e conheço os principais conceitos.',
+        AVANÇADO: 'Meu nível de experiência com IA é Avançado. Tenho experiência com IA, APIs e automações e prefiro uma interação mais direta.',
+      };
+      handleSend(promptMap[level] || `Meu nível de experiência com IA é ${level}`);
+    } else if (actionType === 'ASK_WHAT_CAN_I_DO') {
       handleSend('O que posso fazer aqui nesta tela do Hub?');
     } else if (actionType === 'NAVIGATE_PROJECTS') {
       onChangeView?.('projects');
@@ -521,9 +570,27 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
                   </>
                 )}
               </div>
-              <span className="text-[10px] text-slate-500 font-mono">
-                Perfil: {currentUserRole}
-              </span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={() => setIsMemoryModalOpen(true)}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold transition-all ${
+                    adaptiveProfile?.aiExperienceLevel === 'INICIANTE'
+                      ? 'bg-emerald-950/70 border-emerald-500/50 text-emerald-300 hover:bg-emerald-900/60'
+                      : adaptiveProfile?.aiExperienceLevel === 'AVANÇADO'
+                      ? 'bg-cyan-950/70 border-cyan-500/50 text-cyan-300 hover:bg-cyan-900/60'
+                      : adaptiveProfile?.aiExperienceLevel === 'INTERMEDIÁRIO'
+                      ? 'bg-indigo-950/70 border-indigo-500/50 text-indigo-300 hover:bg-indigo-900/60'
+                      : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-750'
+                  }`}
+                  title="Clique para calibrar seu nível de experiência com IA no painel de memória"
+                >
+                  <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+                  <span>{adaptiveProfile?.aiExperienceLevel || 'Nível IA: Definir'}</span>
+                </button>
+                <span className="text-[10px] text-slate-500 font-mono hidden sm:inline">
+                  • {currentUserRole}
+                </span>
+              </div>
             </div>
 
             {/* Seletor dos 4 Modos Operacionais */}

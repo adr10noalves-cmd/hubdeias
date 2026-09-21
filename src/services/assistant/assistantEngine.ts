@@ -9,6 +9,8 @@ import {
   TaskPlan,
   OperationalExecutionRecord,
   UserRole,
+  UserAdaptiveProfile,
+  AIExperienceLevel,
 } from '../../types';
 import { saveExecutionRecord } from './memoryManager';
 import { analyzeUserIntent, IntentAnalysisResult } from './intentAnalyzer';
@@ -27,6 +29,7 @@ import {
   HubToolDataMutationHandlers,
 } from './hubToolRegistry';
 import { MainHubView } from '../../components/strategic/StrategicNavTabs';
+import { getUserAdaptiveProfile, saveUserAdaptiveProfile } from '../authService';
 
 export interface AssistantEngineInput {
   userMessage: string;
@@ -42,6 +45,7 @@ export interface AssistantEngineInput {
   currentSection?: string;
   currentProject?: ProjectHubItem | null;
   currentUserRole?: UserRole;
+  adaptiveProfile?: UserAdaptiveProfile | null;
   navigationHandlers?: HubToolNavigationHandlers;
   dataMutationHandlers?: HubToolDataMutationHandlers;
 }
@@ -131,6 +135,162 @@ export async function processAssistantMessage(
   // PASSO 1: ENTENDER A INTENÇÃO DO USUÁRIO
   const intentResult = analyzeUserIntent(userMessage, allIdeas, allProjects);
   const effectiveProjectId = targetProjectId || intentResult.mentionedProjectId || currentProject?.id;
+
+  // RECUPERAR E CALIBRAR O PERFIL ADAPTATIVO DO USUÁRIO
+  let currentAdaptiveProfile = input.adaptiveProfile || (await getUserAdaptiveProfile());
+  let adaptiveAdjustmentNote: string | undefined;
+
+  // SE O USUÁRIO DEFINIU OU AJUSTOU O PERFIL DINAMICAMENTE
+  if (intentResult.adaptiveAdjustment) {
+    const adj = intentResult.adaptiveAdjustment;
+    if (adj.type === 'SET_EXPERIENCE_LEVEL' && adj.targetLevel) {
+      currentAdaptiveProfile = await saveUserAdaptiveProfile({
+        aiExperienceLevel: adj.targetLevel,
+        explanationDepth:
+          adj.targetDepth ||
+          (adj.targetLevel === 'INICIANTE'
+            ? 'detalhada'
+            : adj.targetLevel === 'AVANÇADO'
+            ? 'objetiva'
+            : 'equilibrada'),
+        preferredInteractionStyle:
+          adj.targetStyle ||
+          (adj.targetLevel === 'INICIANTE'
+            ? 'orientador'
+            : adj.targetLevel === 'AVANÇADO'
+            ? 'direto'
+            : 'estrategico'),
+        proactivityLevel:
+          adj.targetLevel === 'INICIANTE'
+            ? 'alto'
+            : adj.targetLevel === 'AVANÇADO'
+            ? 'baixo'
+            : 'equilibrado',
+        lastExplicitAdjustment: `Definido explicitamente para ${adj.targetLevel}`,
+      });
+
+      let responseText = '';
+      let actions: AssistantEngineResponse['suggestedActions'] = [];
+
+      if (adj.targetLevel === 'INICIANTE') {
+        responseText = `Perfeito! Configurei seu perfil de interação como **INICIANTE** 🌱.\n\nA partir de agora, vou conduzir nossa parceria com orientação detalhada e acolhedora:\n- **Conceitos primeiro**: Explico o significado e fundamentos antes de usar termos técnicos;\n- **Ensino contínuo**: Mostro o passo a passo enquanto avançamos juntos;\n- **Próximos passos claros**: Antecipo dúvidas e indico o caminho mais seguro e direto;\n- **Recursos do Hub**: Conecto você aos estudos práticos e fichas didáticas do catálogo;\n- **Transparência**: Explico sempre o porquê de cada decisão ou ferramenta sugerida.\n\n💡 *Dica: Se a qualquer momento quiser ir mais direto ao ponto, basta me dizer "não precisa explicar tanto"!*\n\nPor onde você gostaria de começar agora?`;
+        actions = [
+          { label: '❓ O que posso fazer aqui?', actionType: 'ASK_WHAT_CAN_I_DO' },
+          { label: '📚 Explorar Catálogo Didático', actionType: 'NAVIGATE_CATALOG' },
+          { label: '🚀 Conhecer Meus Projetos', actionType: 'NAVIGATE_PROJECTS' },
+          { label: '📖 Ver Banco de Estudos', actionType: 'NAVIGATE_STUDIES' },
+        ];
+      } else if (adj.targetLevel === 'INTERMEDIÁRIO') {
+        responseText = `Excelente! Configurei seu perfil de interação como **INTERMEDIÁRIO** ⚡.\n\nNossa dinâmica manterá um equilíbrio estratégico entre ação e fundamentação:\n- **Decisões fundamentadas**: Explico trade-offs técnicos e motivos de escolhas relevantes, sem me prender a conceitos básicos que você já domina;\n- **Alternativas de ferramentas**: Sugiro IAs e abordagens comparativas para cada desafio;\n- **Aprofundamento sob demanda**: Detalho fluxos técnicos sempre que você solicitar;\n- **Agilidade operacional**: Assumo tarefas simples e cadastros quando você autorizar.\n\nComo posso apoiar seus projetos agora?`;
+        actions = [
+          { label: '🚀 Ir para Projetos', actionType: 'NAVIGATE_PROJECTS' },
+          { label: '⚖️ Comparar IAs do Catálogo', actionType: 'OPEN_COMPARE' },
+          { label: '📋 Planejar Construção', actionType: 'SWITCH_TO_PLANNING' },
+          { label: '➕ Cadastrar Nova IA', actionType: 'OPEN_ADD_IA' },
+        ];
+      } else {
+        // AVANÇADO
+        responseText = `Entendido! Configurei seu perfil de interação como **AVANÇADO** 🚀.\n\nModo de alta densidade técnica e máxima eficiência ativado:\n- **Direto ao ponto**: Zero explicações conceituais básicas e sem preâmbulos desnecessários;\n- **Profundidade de engenharia**: Foco em arquitetura, APIs, automações, context windows, latência e custo;\n- **Autonomia operacional**: Maior iniciativa para tarefas de baixo risco no ecossistema;\n- **Decisões e otimizações**: Foco em trade-offs de infraestrutura, pipelines e escala.\n\nQual arquitetura ou projeto vamos analisar ou executar?`;
+        actions = [
+          { label: '🚀 Terminal de Projetos', actionType: 'NAVIGATE_PROJECTS' },
+          { label: '🧪 Simular Sandbox Groq', actionType: 'SWITCH_TO_SIMULATION' },
+          { label: '➕ Cadastrar Nova IA', actionType: 'OPEN_ADD_IA' },
+          { label: '🧠 Memória Operacional & Métricas', actionType: 'OPEN_MEMORY_MODAL' },
+        ];
+      }
+
+      const durationMs = Date.now() - startTime;
+      return {
+        mode: activeMode,
+        intent: 'atualizacao_projeto',
+        intentDetails: intentResult,
+        context: {
+          projectId: currentProject?.id,
+          projectTitle: currentProject?.name,
+          currentVersion: 'V1',
+          currentStage: currentProject?.currentStage,
+          objective: currentProject?.objective,
+          currentProblems: [],
+          nextSteps: [],
+          relatedStudies: [],
+          summaryForAI: '',
+        },
+        routing: {
+          recommendedModel: {
+            modelId: 'gemini-2.5-flash',
+            modelName: 'Gemini 2.5 Flash',
+            provider: 'GEMINI',
+            costTier: 'FREE',
+            specialtyMatch: 'Geral e Calibração',
+            reasoning: 'Rápido e preciso para preferências do usuário',
+          },
+          alternativeModels: [
+            {
+              modelId: 'llama-3.3-70b-versatile',
+              modelName: 'Llama 3.3 70B',
+              provider: 'GROQ',
+              costTier: 'FREE',
+              specialtyMatch: 'Fallback',
+              reasoning: 'Alta velocidade',
+            },
+          ],
+          taskType: 'GERAL',
+          complexity: 'BAIXA',
+          estimatedCost: 'GRATUITO',
+          executionStrategy: 'FAST',
+        },
+        complexityAnalysis: {
+          level: 1,
+          levelName: 'SIMPLES',
+          score: 10,
+          factors: ['Calibração de perfil adaptativo'],
+          recommendedProvider: 'GEMINI',
+          recommendedModelId: 'gemini-2.5-flash',
+          recommendedModelName: 'Gemini 2.5 Flash',
+          reasoning: 'Calibração do perfil adaptativo do usuário',
+        },
+        providerUsed: 'GEMINI',
+        modelUsed: 'gemini-2.5-flash',
+        fallbackTriggered: false,
+        replyText: responseText,
+        validationReport: {
+          status: 'resposta_validada',
+          passed: true,
+          score: 100,
+          criteriaEvaluated: [
+            { name: 'Perfil Adaptativo Calibrado', passed: true, details: 'Salvo com sucesso na memória do usuário.' },
+          ],
+          summary: `Perfil adaptativo atualizado para ${adj.targetLevel} com sucesso.`,
+          recommendations: ['As próximas interações seguirão a profundidade e estilo selecionados.'],
+        },
+        suggestedActions: actions,
+        durationMs,
+      };
+    } else if (adj.type === 'EXPLAIN_LIKE_BEGINNER') {
+      currentAdaptiveProfile = await saveUserAdaptiveProfile({
+        explanationDepth: 'detalhada',
+        preferredInteractionStyle: 'orientador',
+        lastExplicitAdjustment: 'EXPLAIN_LIKE_BEGINNER',
+      });
+      adaptiveAdjustmentNote =
+        'O usuário solicitou explicitamente: "Explique como se eu estivesse começando / como iniciante". Reduza o nível de abstração, evite termos em inglês desnecessários, ensine os fundamentos com clareza e acolhimento didático.';
+    } else if (adj.type === 'REDUCE_EXPLANATION') {
+      currentAdaptiveProfile = await saveUserAdaptiveProfile({
+        explanationDepth: 'objetiva',
+        preferredInteractionStyle: 'direto',
+        lastExplicitAdjustment: 'REDUCE_EXPLANATION',
+      });
+      adaptiveAdjustmentNote =
+        'O usuário solicitou explicitamente: "Não precisa explicar tanto / vá direto ao ponto". Seja extremamente conciso, direto e sem introduções ou explicações conceituais.';
+    } else if (adj.type === 'INCREASE_EXPLANATION') {
+      currentAdaptiveProfile = await saveUserAdaptiveProfile({
+        explanationDepth: 'detalhada',
+        lastExplicitAdjustment: 'INCREASE_EXPLANATION',
+      });
+      adaptiveAdjustmentNote =
+        'O usuário solicitou explicitamente: "Quero entender por que você fez isso / explique o motivo". Detalhe minuciosamente a lógica, justificativa e critérios da decisão técnica.';
+    }
+  }
 
   // Contexto de ferramentas (quando handlers estiverem disponíveis)
   const toolContext: HubToolContext | null =
@@ -320,6 +480,8 @@ export async function processAssistantMessage(
     currentSection,
     currentProject,
     currentUserRole,
+    adaptiveProfile: currentAdaptiveProfile,
+    adaptiveAdjustmentNote,
     history,
   });
 

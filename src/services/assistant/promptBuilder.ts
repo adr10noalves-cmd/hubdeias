@@ -1,6 +1,13 @@
 import { FilteredTaskContext } from './contextBuilder';
 import { TaskComplexityAnalysis } from './taskComplexity';
-import { AssistantMode, IAItem, ProjectHubItem, UserRole } from '../../types';
+import { 
+  AssistantMode, 
+  IAItem, 
+  ProjectHubItem, 
+  UserRole,
+  UserAdaptiveProfile,
+  AIExperienceLevel,
+} from '../../types';
 import { getCapabilitiesSummaryForPrompt } from './hubCapabilityRegistry';
 import { getToolsPromptSummary } from './hubToolRegistry';
 import { MainHubView } from '../../components/strategic/StrategicNavTabs';
@@ -17,6 +24,8 @@ export interface PromptBuilderInput {
   currentSection?: string;
   currentProject?: ProjectHubItem | null;
   currentUserRole?: UserRole;
+  adaptiveProfile?: UserAdaptiveProfile | null;
+  adaptiveAdjustmentNote?: string;
   history?: Array<{ role: 'user' | 'assistant'; content: string }>;
 }
 
@@ -28,11 +37,75 @@ export interface BuiltPromptResult {
 }
 
 /**
+ * Gera as diretrizes de conduta e profundidade de acordo com o perfil adaptativo do usuário
+ */
+function getAdaptiveBehaviorDirectives(
+  profile: UserAdaptiveProfile | null | undefined,
+  adjustmentNote?: string
+): string {
+  const level: AIExperienceLevel = profile?.aiExperienceLevel || 'INTERMEDIÁRIO';
+  const depth = profile?.explanationDepth || (level === 'INICIANTE' ? 'detalhada' : level === 'AVANÇADO' ? 'objetiva' : 'equilibrada');
+  const style = profile?.preferredInteractionStyle || (level === 'INICIANTE' ? 'orientador' : level === 'AVANÇADO' ? 'direto' : 'estrategico');
+  const proactivity = profile?.proactivityLevel || (level === 'INICIANTE' ? 'alto' : level === 'AVANÇADO' ? 'baixo' : 'equilibrado');
+
+  let levelGuidelines = '';
+
+  if (level === 'INICIANTE') {
+    levelGuidelines = `
+• CONDUTA PARA NÍVEL INICIANTE:
+  - Explique conceitos antes de utilizar termos técnicos (ensine a lógica de forma acolhedora, acessível e sem presunções).
+  - Ensine enquanto executa: ao sugerir um recurso ou IA, contextualize sucintamente para que serve.
+  - Sugira próximos passos claros e antecipe dificuldades comuns.
+  - Faça perguntas orientadoras (uma por vez) para guiar a reflexão sem sobrecarregar.
+  - Explique resumidamente o porquê de cada decisão ou escolha tomada.
+  - Ofereça e indique acesso aos recursos de aprendizagem e estudos já existentes no Hub.
+  - Acompanhe o usuário de perto com proatividade orientadora.
+  - Evite sobrecarregar o usuário com termos puramente técnicos, snippets de código intimidador ou detalhes de infraestrutura a menos que explicitamente solicitado.`;
+  } else if (level === 'INTERMEDIÁRIO') {
+    levelGuidelines = `
+• CONDUTA PARA NÍVEL INTERMEDIÁRIO:
+  - Equilibre execução prática com explicação de decisões relevantes.
+  - Permita e ofereça aprofundamento técnico sob demanda ("Se quiser, posso detalhar a arquitetura ou o fluxo de dados...").
+  - Sugira alternativas de ferramentas e trade-offs técnicos claros.
+  - Faça perguntas estratégicas focadas no produto, viabilidade e maturidade do projeto.
+  - Assuma tarefas operacionais simples quando autorizado.
+  - Evite explicar conceitos básicos desnecessariamente (o usuário já sabe o que é LLM, API, prompt e fine-tuning).`;
+  } else {
+    // AVANÇADO
+    levelGuidelines = `
+• CONDUTA PARA NÍVEL AVANÇADO:
+  - Comunicação altamente objetiva, sintética, precisa e densa em valor.
+  - Reduza a zero explicações básicas ou conceituais.
+  - Foco em discussões técnicas profundas: arquitetura de software, latência, custos, context windows, automações, pipelines, engenharia de contexto e APIs.
+  - Apresente arquitetura, alternativas e implicações técnicas e de escala de forma estruturada.
+  - Assuma maior iniciativa e autonomia operacional em operações de baixo risco.
+  - Discuta otimizações e estratégias técnicas com prioridade máxima na eficiência.`;
+  }
+
+  const dynamicNoteBlock = adjustmentNote
+    ? `\n⚡ AJUSTE DINÂMICO IMEDIATO REQUISITADO NESTA INTERAÇÃO:
+${adjustmentNote}
+(IMPORTANTE: A preferência explícita mais recente do usuário prevalece sobre o nível base!)`
+    : '';
+
+  return `
+--- PERFIL ADAPTATIVO DO USUÁRIO & PARTICIPAÇÃO PERSONALIZADA ---
+• Nível Declarado: ${level}
+• Profundidade de Explicação Atual: ${depth}
+• Estilo de Participação: ${style}
+• Nível de Proatividade: ${proactivity}
+${levelGuidelines}
+${dynamicNoteBlock}
+-----------------------------------------------------------------`;
+}
+
+/**
  * PROMPT BUILDER DO AUXILIAR MESTRE DO HUB
  * Gera prompts sob medida integrando:
  * - Mapa de capacidades reais do Hub;
  * - Registro de ferramentas autorizadas;
  * - Consciência da tela e do projeto ativo;
+ * - Perfil adaptativo do usuário (Iniciante, Intermediário, Avançado);
  * - Personalidade pedagógica e diretiva sem clichês.
  */
 export function buildDynamicPrompt(input: PromptBuilderInput): BuiltPromptResult {
@@ -48,8 +121,13 @@ export function buildDynamicPrompt(input: PromptBuilderInput): BuiltPromptResult
     currentSection,
     currentProject,
     currentUserRole = 'USER',
+    adaptiveProfile,
+    adaptiveAdjustmentNote,
     history = [],
   } = input;
+
+  // Diretrizes comportamentais adaptadas ao perfil de experiência do usuário
+  const adaptiveDirectives = getAdaptiveBehaviorDirectives(adaptiveProfile, adaptiveAdjustmentNote);
 
   const relevantCatalogSlice = catalog
     .slice(0, 20)
@@ -108,6 +186,8 @@ ${history.slice(-5).map((h) => `${h.role === 'user' ? 'Usuário' : 'Auxiliar Mes
 
 NÍVEL DE COMPLEXIDADE: Nível ${complexity.level} (${complexity.levelName})
 ${modeInstruction}
+
+${adaptiveDirectives}
 
 ${screenContext}
 ${projectMemoryContext}
