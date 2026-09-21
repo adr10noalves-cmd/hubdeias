@@ -625,6 +625,35 @@ export interface UserAdaptiveProfile {
   updatedAt: string;
 }
 
+// --- AUTONOMIA PROATIVA & MOTOR DE INICIATIVA ---
+export type HubEventType =
+  | 'route_changed'
+  | 'project_opened'
+  | 'project_created'
+  | 'mission_created'
+  | 'mission_completed'
+  | 'mission_blocked'
+  | 'decision_required'
+  | 'executor_started'
+  | 'executor_completed'
+  | 'executor_failed'
+  | 'roadmap_updated'
+  | 'ai_registered'
+  | 'repeated_error'
+  | 'user_returned'
+  | 'context_changed'
+  | 'user_idle_in_stage';
+
+export type InitiativeDecisionType =
+  | 'SILENCE'
+  | 'INFORM'
+  | 'ASK'
+  | 'SUGGEST'
+  | 'TEACH'
+  | 'NAVIGATE'
+  | 'EXECUTE'
+  | 'ESCALATE_TO_USER';
+
 export interface UserAccount {
   id: string;
   username: string;

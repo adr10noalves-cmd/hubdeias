@@ -28,6 +28,7 @@ import {
   HubToolNavigationHandlers,
   HubToolDataMutationHandlers,
 } from './hubToolRegistry';
+import { publishHubEvent } from './hubEventBus';
 import { MainHubView } from '../../components/strategic/StrategicNavTabs';
 import { getUserAdaptiveProfile, saveUserAdaptiveProfile } from '../authService';
 
@@ -565,11 +566,21 @@ export async function processAssistantMessage(
     (intentResult.suggestedToolCall && intentResult.confidence >= 0.9 ? intentResult.suggestedToolCall : null);
 
   if (toolToRun && toolContext) {
+    publishHubEvent('executor_started', {
+      toolName: toolToRun.name,
+      params: toolToRun.params,
+    });
+
     try {
       toolExecution = await executeHubTool(toolToRun.name, toolToRun.params, toolContext);
 
       // Se a ferramenta foi executada com sucesso, complementamos a resposta para o usuário de forma elegante
       if (toolExecution.success) {
+        publishHubEvent('executor_completed', {
+          toolName: toolToRun.name,
+          result: toolExecution,
+        });
+
         if (toolToRun.name === 'create_ai_entry') {
           replyText = `⚡ **IA Cadastrada com Sucesso!**\n\n${toolExecution.message}\n\nA nova ferramenta já está disponível no catálogo e pronta para ser utilizada nos seus projetos e estudos.`;
         } else if (toolToRun.name === 'open_project') {
@@ -578,6 +589,11 @@ export async function processAssistantMessage(
           replyText = `🧭 **Navegação Realizada**\n\n${toolExecution.message}\n\n${replyText}`;
         }
       } else if (toolExecution.message) {
+        publishHubEvent('executor_failed', {
+          toolName: toolToRun.name,
+          error: toolExecution.message,
+        });
+
         // Se houve erro ou aviso de permissão/duplicidade na ferramenta
         if (toolToRun.name === 'create_ai_entry' && toolExecution.message.includes('já está cadastrada')) {
           replyText = `ℹ️ **Verificação de Catálogo:**\n\n${toolExecution.message}\n\nVocê pode consultar a ficha dela no Catálogo de IAs.`;
@@ -585,6 +601,10 @@ export async function processAssistantMessage(
       }
     } catch (toolErr: any) {
       console.warn('[AssistantEngine] Erro ao executar ferramenta do Hub:', toolErr);
+      publishHubEvent('executor_failed', {
+        toolName: toolToRun.name,
+        error: toolErr.message || 'Falha na execução da ferramenta',
+      });
     }
   }
 

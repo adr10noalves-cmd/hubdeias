@@ -51,6 +51,7 @@ import { getCurrentSession, clearCurrentSession } from './services/authService';
 import { GuardiaoLoginModal } from './components/auth/GuardiaoLoginModal';
 import { SecurityCenterModal } from './components/auth/SecurityCenterModal';
 import { AuthSession } from './types';
+import { publishHubEvent } from './services/assistant/hubEventBus';
 
 const STORAGE_KEY = 'ias_v2';
 
@@ -190,6 +191,38 @@ export default function App() {
       unsubStudies();
       unsubLogs();
       window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  // Monitora retorno do usuário após período de inatividade
+  useEffect(() => {
+    let lastActive = Date.now();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        const elapsed = Date.now() - lastActive;
+        if (elapsed > 1000 * 60 * 3) {
+          publishHubEvent('user_returned', { awayDurationMs: elapsed });
+        }
+        lastActive = Date.now();
+      } else {
+        lastActive = Date.now();
+      }
+    };
+
+    const handleFocus = () => {
+      const elapsed = Date.now() - lastActive;
+      if (elapsed > 1000 * 60 * 3) {
+        publishHubEvent('user_returned', { awayDurationMs: elapsed });
+      }
+      lastActive = Date.now();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
     };
   }, []);
 
@@ -381,6 +414,8 @@ export default function App() {
       saveIAToFirestore(newItem).catch((err) =>
         console.warn('[Firestore] Salvo localmente, erro ao persistir nuvem:', err)
       );
+
+      publishHubEvent('ai_registered', { iaName: newItem.name, category: newItem.category });
     }
   };
 
@@ -515,8 +550,10 @@ export default function App() {
         <StrategicNavTabs
           currentView={currentHubView}
           onChangeView={(view) => {
+            const prev = currentHubView;
             setCurrentHubView(view);
             if (view !== 'projects') setSelectedProjectDetail(null);
+            publishHubEvent('route_changed', { from: prev, to: view });
           }}
           onOpenGlobalSearch={() => setIsGlobalSearchOpen(true)}
           onOpenCentralIA={() => setIsCentralIAOpen(true)}
@@ -716,12 +753,16 @@ export default function App() {
           ) : (
             <ProjectsManager
               projects={projects}
-              onSelectProject={(proj) => setSelectedProjectDetail(proj)}
+              onSelectProject={(proj) => {
+                setSelectedProjectDetail(proj);
+                publishHubEvent('project_opened', { project: proj });
+              }}
               onCreateProject={(newProj) => {
                 saveSingleProject(newProj);
                 const updatedList = getProjects();
                 setProjects(updatedList);
                 setSelectedProjectDetail(newProj);
+                publishHubEvent('project_created', { project: newProj });
               }}
               onDeleteProject={(id) => {
                 deleteProject(id);
@@ -945,6 +986,7 @@ export default function App() {
           if (found) {
             setSelectedProjectDetail(found);
             setCurrentHubView('projects');
+            publishHubEvent('project_opened', { project: found });
           }
         }}
         onOpenAddIA={() => {

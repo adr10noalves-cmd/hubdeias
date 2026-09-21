@@ -32,9 +32,11 @@ import {
   AssistantMode,
   TaskPlan,
   ProjectHubItem,
+  ProjectMission,
   UserRole,
   UserAdaptiveProfile,
   AIExperienceLevel,
+  InitiativeDecisionType,
 } from '../types';
 import { 
   processAssistantMessage, 
@@ -45,6 +47,10 @@ import { AssistantMemoryModal } from './strategic/AssistantMemoryModal';
 import { ProjectLearningModal } from './strategic/ProjectLearningModal';
 import { OrchestratorSettingsModal } from './strategic/OrchestratorSettingsModal';
 import { MainHubView } from './strategic/StrategicNavTabs';
+import { subscribeHubEvent, publishHubEvent, HubEvent } from '../services/assistant/hubEventBus';
+import { evaluateInitiative } from '../services/assistant/initiativeEngine';
+import { recordUserAnswerToQuestion } from '../services/assistant/initiativeMemory';
+import { saveProjectMission, saveSingleProject, getProjectMissions } from '../services/projectsService';
 
 interface CentralAICoordinatorProps {
   catalog: IAItem[];
@@ -97,6 +103,10 @@ interface Message {
     promptQuestion: string;
   };
   suggestedActions?: { label: string; actionType: string; target?: string; payload?: any }[];
+  isProactive?: boolean;
+  proactiveDecision?: InitiativeDecisionType | string;
+  proactiveTopicKey?: string;
+  proactivePriority?: 'low' | 'medium' | 'high' | 'critical';
   timestamp: Date;
 }
 
@@ -157,6 +167,7 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [activeLearningIdea, setActiveLearningIdea] = useState<IdeaItem | null>(null);
   const [adaptiveProfile, setAdaptiveProfile] = useState<UserAdaptiveProfile | null>(null);
+  const [activeProactiveBubble, setActiveProactiveBubble] = useState<Message | null>(null);
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -205,12 +216,78 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
     loadProfile();
   }, []);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
   const activeProject =
     projects.find((p) => p.id === selectedProjectId) ||
     ideas.find((i) => i.id === selectedProjectId) ||
     currentProject;
+
+  // =========================================================================
+  // ⚡ MOTOR DE INICIATIVA PROATIVA & PRESENÇA PERMANENTE DO AUXILIAR MESTRE
+  // =========================================================================
+  useEffect(() => {
+    const unsubscribe = subscribeHubEvent((event: HubEvent) => {
+      // Prepara o contexto operacional atual do Hub
+      const effectiveProj =
+        activeProject && 'status' in activeProject
+          ? (activeProject as ProjectHubItem)
+          : currentProject;
+
+      const evaluation = evaluateInitiative(event, {
+        currentRoute,
+        currentProject: effectiveProj,
+        allProjects: projects,
+        currentUserRole,
+        adaptiveProfile: adaptiveProfile || {
+          aiExperienceLevel: 'INTERMEDIÁRIO',
+          explanationDepth: 'equilibrada',
+          preferredInteractionStyle: 'estrategico',
+          proactivityLevel: 'equilibrado',
+          updatedAt: new Date().toISOString(),
+        },
+        studies,
+        ideas,
+      });
+
+      // Se a decisão for diferente de SILENCE e houver mensagem
+      if (evaluation.decision !== 'SILENCE' && evaluation.messageText) {
+        const proactiveMsg: Message = {
+          id: `proactive-${Date.now()}`,
+          role: 'assistant',
+          content: evaluation.messageText,
+          mode: 'CONVERSATION',
+          suggestedActions: evaluation.suggestedActions,
+          isProactive: true,
+          proactiveDecision: evaluation.decision,
+          proactiveTopicKey: evaluation.topicKey,
+          proactivePriority: evaluation.priority,
+          timestamp: new Date(),
+        };
+
+        setMessages((prev) => [...prev, proactiveMsg]);
+
+        // Se a janela estiver fechada, apresenta o balão flutuante de iniciativa autônoma
+        if (!isOpen) {
+          setActiveProactiveBubble(proactiveMsg);
+        }
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [
+    currentRoute,
+    activeProject,
+    currentProject,
+    projects,
+    currentUserRole,
+    adaptiveProfile,
+    studies,
+    ideas,
+    isOpen,
+  ]);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -240,6 +317,12 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
     setInputMessage('');
     setLoading(true);
     setStatus('THINKING');
+
+    // Se a última mensagem for proativa com tópico registrado, atualiza na memória de iniciativa
+    const lastAssistantMsg = [...messages].reverse().find((m) => m.role === 'assistant');
+    if (lastAssistantMsg?.isProactive && lastAssistantMsg.proactiveTopicKey) {
+      recordUserAnswerToQuestion(lastAssistantMsg.proactiveTopicKey, text.trim());
+    }
 
     try {
       const historyPayload = messages.map((m) => ({ role: m.role, content: m.content }));
@@ -433,6 +516,112 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
     } else if (actionType === 'OPEN_PROMPT_GEN') {
       if (onOpenPromptGen) onOpenPromptGen();
       setIsOpen(false);
+    } else if (actionType === 'STRUCTURE_FIRST_STEPS') {
+      const targetProj = projects.find((p) => p.id === target) || currentProject;
+      if (targetProj) {
+        // Cria 3 missões estruturantes iniciais
+        const starterMissions: Array<Omit<ProjectMission, 'id'>> = [
+          {
+            projectId: targetProj.id,
+            title: 'Mapeamento de Requisitos e Escopo Inicial',
+            description: 'Delimitar objetivos específicos, restrições e casos de uso essenciais.',
+            status: 'Em andamento',
+            priority: 'Alta',
+            createdAt: new Date().toLocaleDateString(),
+            dueDate: new Date(Date.now() + 86400000 * 3).toISOString().split('T')[0],
+            notes: 'Missão gerada pelo Auxiliar Mestre para desbloqueio de planejamento.',
+          },
+          {
+            projectId: targetProj.id,
+            title: 'Seleção de Ferramentas de IA e Arquitetura',
+            description: 'Identificar no catálogo as IAs mais eficientes para executar as tarefas do projeto.',
+            status: 'Pendente',
+            priority: 'Alta',
+            createdAt: new Date().toLocaleDateString(),
+            dueDate: new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0],
+            notes: 'Consultar catálogo do Hub e avaliar trade-offs.',
+          },
+          {
+            projectId: targetProj.id,
+            title: 'Desenvolvimento do Protótipo e Validação',
+            description: 'Construir a primeira versão funcional e testar com critérios objetivos.',
+            status: 'Pendente',
+            priority: 'Média',
+            createdAt: new Date().toLocaleDateString(),
+            dueDate: new Date(Date.now() + 86400000 * 14).toISOString().split('T')[0],
+          },
+        ];
+
+        starterMissions.forEach((m) => {
+          saveProjectMission({ ...m, id: `mission-${Date.now()}-${Math.random().toString(36).substr(2, 4)}` });
+        });
+
+        const updatedProj: ProjectHubItem = {
+          ...targetProj,
+          currentStage: starterMissions[0].title,
+          nextAction: starterMissions[0].description,
+          status: 'Planejamento',
+          updatedAt: new Date().toISOString(),
+          history: [
+            {
+              id: `hist-${Date.now()}`,
+              date: new Date().toLocaleDateString(),
+              description: 'Plano inicial de execução estruturado pelo Auxiliar Mestre.',
+              author: 'Auxiliar Mestre',
+            },
+            ...targetProj.history,
+          ],
+        };
+        saveSingleProject(updatedProj);
+        if (onOpenProject) {
+          onOpenProject(targetProj.id);
+        }
+
+        const confirmMsg: Message = {
+          id: `sys-${Date.now()}`,
+          role: 'assistant',
+          content: `🎯 **Plano de Execução Estruturado com Sucesso!**\n\nCriei 3 missões essenciais para o projeto **"${targetProj.name}"**:\n1. 🚀 **Mapeamento de Requisitos e Escopo Inicial** (Em andamento)\n2. ⚖️ **Seleção de Ferramentas de IA e Arquitetura** (Pendente)\n3. 🧪 **Desenvolvimento do Protótipo e Validação** (Pendente)\n\nO projeto foi atualizado para o status **Planejamento**. Como deseja conduzir o primeiro passo?`,
+          suggestedActions: [
+            { label: '📋 Planejar Etapa 1 com Gemini', actionType: 'SWITCH_TO_PLANNING' },
+            { label: '🧪 Simular com Groq', actionType: 'SWITCH_TO_SIMULATION' },
+            { label: '💡 Recomendar IAs do Catálogo', actionType: 'RECOMMEND_IAS', target: targetProj.id },
+          ],
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, confirmMsg]);
+      }
+    } else if (actionType === 'GENERATE_ROADMAP') {
+      const targetProj = projects.find((p) => p.id === target) || currentProject;
+      handleSend(`Gere um roadmap detalhado com fases recomendadas para o projeto "${targetProj?.name || ''}".`, 'PLANNING');
+    } else if (actionType === 'RECOMMEND_IAS') {
+      const targetProj = projects.find((p) => p.id === target) || currentProject;
+      handleSend(`Quais são as melhores inteligências artificiais do catálogo para atender aos objetivos do projeto "${targetProj?.name || ''}"?`);
+    } else if (actionType === 'ANALYZE_PENDING_DECISION') {
+      const targetProj = projects.find((p) => p.id === target) || currentProject;
+      handleSend(`Quero analisar a decisão pendente no projeto "${targetProj?.name || ''}". Quais são os riscos e alternativas recomendadas?`);
+    } else if (actionType === 'SIMULATE_DECISION') {
+      const targetProj = projects.find((p) => p.id === target) || currentProject;
+      handleSend(`Simule via sandbox preditivo os cenários de impacto para a decisão pendente do projeto "${targetProj?.name || ''}".`, 'SIMULATION');
+    } else if (actionType === 'OPEN_DEBATE') {
+      if (target && onOpenProject) onOpenProject(target);
+      handleSend('Vamos abrir o debate estratégico deste projeto para deliberar sobre a próxima etapa.');
+    } else if (actionType === 'VIEW_CURRENT_MISSION') {
+      if (target && onOpenProject) onOpenProject(target);
+      handleSend('Mostre os detalhes da missão em andamento e me oriente sobre sua execução prática.');
+    } else if (actionType === 'START_NEXT_MISSION') {
+      handleSend('Vamos iniciar a próxima missão planejada. O que precisamos fazer agora?');
+    } else if (actionType === 'TEACH_AREA') {
+      const routeName = target || currentRoute;
+      handleSend(`Me explique como funciona a área "${routeLabels[routeName] || routeName}" do Hub e como posso aproveitá-la melhor.`);
+    } else if (actionType === 'OPEN_PROJECT' && target) {
+      if (onOpenProject) onOpenProject(target);
+      handleSend(`Quero retomar este projeto. Onde paramos e qual a próxima ação imediata?`);
+    } else if (actionType === 'APPLY_FIX') {
+      handleSend('Por favor, aplique a alternativa de correção segura para resolver o erro de execução detectado.');
+    } else if (actionType === 'SWITCH_MODEL') {
+      handleSend('Por favor, alterne para o modelo alternativo mais adequado e execute a tarefa novamente.');
+    } else if (actionType === 'DISMISS') {
+      setActiveProactiveBubble(null);
     }
   };
 
@@ -457,6 +646,69 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
   return (
     <>
       <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+        {/* Balão Flutuante de Iniciativa Autônoma (quando fechado) */}
+        {!isOpen && activeProactiveBubble && (
+          <div className="mb-3 w-[92vw] max-w-sm sm:max-w-md bg-slate-900/98 backdrop-blur-xl border-2 border-indigo-500/60 rounded-2xl p-4 shadow-2xl shadow-indigo-950/80 animate-in fade-in slide-in-from-bottom-3 duration-300">
+            <div className="flex items-start justify-between gap-2 border-b border-slate-800 pb-2 mb-2">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-indigo-500 to-cyan-400 flex items-center justify-center text-white">
+                  <Bot className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-white flex items-center gap-1">
+                    Central de IA <Sparkles className="w-3 h-3 text-amber-400" />
+                  </span>
+                  <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-wider block">
+                    Iniciativa Autônoma • {activeProactiveBubble.proactiveDecision || 'Proatividade'}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveProactiveBubble(null);
+                }}
+                className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800 transition-colors"
+                title="Dispensar aviso"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-200 leading-relaxed whitespace-pre-line mb-3">
+              {activeProactiveBubble.content}
+            </p>
+
+            {activeProactiveBubble.suggestedActions && activeProactiveBubble.suggestedActions.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {activeProactiveBubble.suggestedActions.map((act, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      setIsOpen(true);
+                      setActiveProactiveBubble(null);
+                      handleActionClick(act.actionType, act.target, act.payload);
+                    }}
+                    className="px-2.5 py-1.5 bg-indigo-950/90 hover:bg-indigo-900 text-cyan-300 hover:text-white rounded-lg border border-indigo-700/60 text-xs font-medium flex items-center gap-1 transition-all active:scale-95 shadow-sm"
+                  >
+                    <span>{act.label}</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                ))}
+                <button
+                  onClick={() => {
+                    setIsOpen(true);
+                    setActiveProactiveBubble(null);
+                  }}
+                  className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg border border-slate-700 text-xs font-medium transition-all"
+                >
+                  Abrir Conversa
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Botão flutuante do Auxiliar Mestre / Central IA */}
         {!isOpen && (
           <button
@@ -676,6 +928,19 @@ export const CentralAICoordinator: React.FC<CentralAICoordinatorProps> = ({
                       <div className="mb-2 flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded text-[10px] font-mono">
                         <FlaskConical className="w-3 h-3" />
                         SIMULAÇÃO VIRTUAL GROQ (NÃO ALTERA PRODUÇÃO)
+                      </div>
+                    )}
+
+                    {/* Badge de Iniciativa Autônoma */}
+                    {m.isProactive && (
+                      <div className="mb-2.5 flex items-center justify-between gap-1.5 px-2.5 py-1.5 bg-gradient-to-r from-amber-500/15 via-indigo-500/15 to-amber-500/15 border border-amber-500/40 text-amber-300 rounded-lg text-[10px] font-mono shadow-xs">
+                        <div className="flex items-center gap-1.5">
+                          <Zap className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                          <span className="font-bold tracking-wider">INICIATIVA AUTÔNOMA DO MESTRE</span>
+                        </div>
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-200 border border-amber-500/30 uppercase font-semibold">
+                          {m.proactiveDecision || 'PROATIVIDADE'}
+                        </span>
                       </div>
                     )}
 

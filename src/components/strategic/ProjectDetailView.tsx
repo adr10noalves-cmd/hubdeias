@@ -55,6 +55,7 @@ import { ProjectNextActionWidget } from './ProjectNextActionWidget';
 import { ProjectStagePedagogyModal } from './ProjectStagePedagogyModal';
 import { ProjectLearningModal } from './ProjectLearningModal';
 import { RoadmapEditor } from './RoadmapEditor';
+import { publishHubEvent } from '../../services/assistant/hubEventBus';
 
 interface ProjectDetailViewProps {
   project: ProjectHubItem;
@@ -143,6 +144,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       updatedAt: new Date().toISOString(),
     };
     onUpdate(updated);
+    publishHubEvent('roadmap_updated', { project: updated, roadmap: newRoadmap });
   };
 
   const handleAddHistory = (e: React.FormEvent) => {
@@ -222,6 +224,7 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       updatedAt: new Date().toISOString(),
     };
     onUpdate(updatedProject);
+    publishHubEvent('decision_required', { project: updatedProject, decision });
   };
 
   const handleDeleteDecision = (id: string) => {
@@ -248,6 +251,12 @@ export const ProjectDetailView: React.FC<ProjectDetailViewProps> = ({
       updatedAt: new Date().toISOString(),
     };
     onUpdate(updatedProject);
+
+    if (mission.status === 'Concluída') {
+      publishHubEvent('mission_completed', { project: updatedProject, mission });
+    } else {
+      publishHubEvent('mission_created', { project: updatedProject, mission });
+    }
   };
 
   const handleDeleteMission = (id: string) => {
