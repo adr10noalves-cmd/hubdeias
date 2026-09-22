@@ -553,6 +553,16 @@ export interface ProjectMessage {
   aiModel?: string;
 }
 
+export type ProjectDecisionStatus =
+  | 'SUGESTÃO'
+  | 'EM DISCUSSÃO'
+  | 'APROVADA'
+  | 'EM EXECUÇÃO'
+  | 'CONCLUÍDA'
+  | 'Ativa'
+  | 'Revisada'
+  | 'Revogada';
+
 export interface ProjectDecision {
   id: string;
   projectId: string;
@@ -561,7 +571,7 @@ export interface ProjectDecision {
   date: string;
   responsible: string;
   impact: string;
-  status: 'Ativa' | 'Revisada' | 'Revogada';
+  status: ProjectDecisionStatus;
 }
 
 export interface ProjectMission {
@@ -586,6 +596,123 @@ export interface ProjectSuggestion {
   createdAt: string;
 }
 
+export type DeliverableType = string;
+export type TestType = 'Unitário' | 'Integração' | 'Segurança' | 'Usabilidade' | 'Funcional' | 'UNITARIO' | 'INTEGRACAO' | 'FUNCIONAL' | 'ESTRESSE' | 'SEGURANCA' | 'USABILIDADE';
+export type TestResultStatus = 'Passou' | 'Falhou' | 'Pendente' | 'PASSOU' | 'FALHOU' | 'AVISO' | 'BLOQUEADO';
+export type ProjectDeploymentStatus = 'Sucesso' | 'Falha' | 'Em andamento' | 'LOCAL' | 'HOMOLOGACAO' | 'PRODUCAO' | 'FALHA';
+
+export interface ProjectDeliverable {
+  id: string;
+  projectId: string;
+  name: string;
+  title?: string;
+  type: string; // ex: 'Componente React', 'API Endpoint', 'Documento', 'Schema SQL'
+  description: string;
+  content?: string;
+  createdAt: string;
+  url?: string;
+  path?: string;
+  language?: string;
+  dependencies?: string[];
+}
+
+export interface ProjectVersion {
+  id: string;
+  projectId: string;
+  version: string; // ex: 'V1.0', 'V1.1'
+  title?: string;
+  date: string;
+  releasedAt?: string;
+  changes: string;
+  changelog?: string[];
+  reason: string;
+  result: string;
+  status: 'Planejada' | 'Em desenvolvimento' | 'Lançada' | 'Ativa';
+  deploymentStatus?: ProjectDeploymentStatus;
+  significantChanges?: string[];
+  pendingForNext?: string[];
+}
+
+export interface ProjectTest {
+  id: string;
+  projectId: string;
+  name: string;
+  type: TestType;
+  result: TestResultStatus;
+  status?: TestResultStatus;
+  details: string;
+  executionDetails?: string;
+  scope?: string;
+  errorFound?: string;
+  fixApplied?: string;
+  date: string;
+  testedAt?: string;
+}
+
+export interface ProjectIssue {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string;
+  errorFound?: string;
+  fixApplied?: string;
+  status: 'Aberto' | 'Resolvido' | 'Em análise';
+  date: string;
+}
+
+export interface ProjectDeployment {
+  id: string;
+  projectId: string;
+  version: string;
+  date: string;
+  status: 'Sucesso' | 'Falha' | 'Em andamento';
+  changes: string;
+  result: string;
+  notes?: string;
+  nextEvolution?: string;
+}
+
+export interface ProjectRequirements {
+  userRequirements: string[];      // Solicitado explicitamente pelo usuário
+  inferredRequirements: string[];  // Inferência técnica indispensável
+  necessaryInferences?: string[];  // Alias para inferências necessárias
+  aiSuggestions: string[];         // Sugestão da IA (não é requisito até aprovação)
+  approvedDecisions: string[];     // Decisões autorizadas pelo usuário
+  projectId?: string;
+  lastUpdated?: string;
+}
+
+export interface ProjectPedagogicalExplanation {
+  id: string;
+  projectId: string;
+  title: string;
+  whatWasDone: string;
+  whyDone?: string;
+  whyWasDone?: string;
+  howItWorks: string;
+  whatWasTested?: string;
+  whatWasChanged?: string;
+  whatIsMissing?: string;
+  whatCanEvolve?: string;
+  conceptsTaught?: string[];
+  complexityLevel?: 'BASICO' | 'INTERMEDIARIO' | 'AVANCADO';
+  createdAt?: string;
+  date: string;
+}
+
+export interface ProjectCompleteState {
+  project: ProjectHubItem | null;
+  decisions: ProjectDecision[];
+  missions: ProjectMission[];
+  suggestions: ProjectSuggestion[];
+  deliverables: ProjectDeliverable[];
+  tests: ProjectTest[];
+  versions: ProjectVersion[];
+  pedagogies: ProjectPedagogicalExplanation[];
+  requirements: ProjectRequirements;
+  messages: ProjectMessage[];
+}
+
 export interface ProjectHubItem {
   id: string;
   name: string;
@@ -602,6 +729,14 @@ export interface ProjectHubItem {
   notes: string;
   history: ProjectHistoryItem[];
   roadmap?: RoadmapItem[];
+  currentVersion?: string; // ex: 'V1.0'
+  requirements?: ProjectRequirements;
+  deliverables?: ProjectDeliverable[];
+  versions?: ProjectVersion[];
+  tests?: ProjectTest[];
+  issues?: ProjectIssue[];
+  deployments?: ProjectDeployment[];
+  pedagogicalExplanations?: ProjectPedagogicalExplanation[];
 }
 
 // --- TIPOS DE AUTENTICAÇÃO E SEGURANÇA (GUARDIÃO & CENTRAL DE SEGURANÇA) ---

@@ -7,9 +7,33 @@ import {
   IACategory,
   IALevel,
   CATEGORIES,
+  ProjectDecision,
+  ProjectMission,
+  ProjectDeliverable,
+  ProjectTest,
+  ProjectVersion,
+  ProjectDeployment,
+  ProjectPedagogicalExplanation,
+  ProjectDecisionStatus,
 } from '../../types';
 import { MainHubView } from '../../components/strategic/StrategicNavTabs';
-import { getProjectMissions, getProjectDecisions } from '../projectsService';
+import {
+  getProjects,
+  saveSingleProject,
+  getProjectMissions,
+  saveProjectMission,
+  getProjectDecisions,
+  saveProjectDecision,
+  updateProjectDecisionStatus,
+  saveProjectDeliverable,
+  saveProjectTest,
+  saveProjectVersion,
+  saveProjectDeployment,
+  saveProjectPedagogy,
+  saveProjectRequirements,
+  recordProjectActivity,
+  getCompleteProjectState,
+} from '../projectsService';
 
 export type ToolRiskLevel = 'READ' | 'NAVIGATION' | 'LOW_RISK_WRITE' | 'SENSITIVE' | 'DESTRUCTIVE';
 
@@ -442,6 +466,383 @@ export const HUB_TOOLS: Record<string, HubToolDefinition> = {
       }
     },
   },
+
+  project_create_or_attach: {
+    name: 'project_create_or_attach',
+    description:
+      'Cria um novo projeto ou localiza e associa o projeto existente para que o Agente Executor passe a operar nele.',
+    riskLevel: 'LOW_RISK_WRITE',
+    requiredPermission: 'USER',
+    parametersDescription: 'projectName: string, objective: string, expectedResult?: string',
+    execute: async (params, context) => {
+      const projectName = (params.projectName || '').trim();
+      const objective = (params.objective || '').trim();
+      const expectedResult = (params.expectedResult || '').trim();
+
+      if (!projectName) {
+        return { success: false, message: 'Nome do projeto é obrigatório.' };
+      }
+
+      // Procura se já existe projeto com nome idêntico ou muito similar
+      const existing = (context.allProjects || getProjects()).find(
+        (p) => p.name.toLowerCase() === projectName.toLowerCase() ||
+               p.name.toLowerCase().includes(projectName.toLowerCase())
+      );
+
+      if (existing) {
+        if (context.navigationHandlers?.openProject) {
+          context.navigationHandlers.openProject(existing.id);
+        }
+        return {
+          success: true,
+          actionExecuted: 'attached_existing_project',
+          message: `Projeto existente "${existing.name}" localizado e selecionado como contexto de trabalho ativo.`,
+          data: existing,
+        };
+      }
+
+      // Cria novo projeto integrado à estrutura existente
+      const newProject: ProjectHubItem = {
+        id: `proj-${Date.now()}`,
+        name: projectName,
+        description: objective || `Projeto ${projectName} iniciado com o Agente Executor.`,
+        objective: objective || `Desenvolver e implantar ${projectName}.`,
+        expectedResult: expectedResult || 'Entrega funcional validada e documentada.',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        status: 'Planejamento',
+        currentStage: 'Alinhamento inicial de escopo e arquitetura',
+        nextAction: 'Debater arquitetura e aprovar primeiras decisões',
+        progress: 10,
+        aiTools: ['Gemini 2.5 Pro', 'Groq GPT-OSS'],
+        notes: 'Iniciado via Agente Executor da Central IA.',
+        currentVersion: 'V1.0',
+        requirements: {
+          userRequirements: [objective || projectName],
+          inferredRequirements: ['Persistência segura e arquitetura modular.'],
+          aiSuggestions: ['Criar suíte de testes de fumaça e documentação pedagógica.'],
+          approvedDecisions: [],
+        },
+        history: [
+          {
+            id: `hist-${Date.now()}`,
+            date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            description: `Projeto criado via Agente Executor: "${projectName}".`,
+            author: 'Central IA',
+          },
+        ],
+      };
+
+      saveSingleProject(newProject);
+
+      if (context.navigationHandlers?.openProject) {
+        context.navigationHandlers.openProject(newProject.id);
+      }
+
+      return {
+        success: true,
+        actionExecuted: 'created_new_project',
+        message: `Projeto "${newProject.name}" criado com sucesso e aberto para acompanhamento do ciclo de vida.`,
+        data: newProject,
+      };
+    },
+  },
+
+  project_propose_decision: {
+    name: 'project_propose_decision',
+    description:
+      'Registra uma decisão ou proposta técnica no projeto nos estados SUGESTÃO ou EM DISCUSSÃO para aprovação do usuário.',
+    riskLevel: 'LOW_RISK_WRITE',
+    requiredPermission: 'USER',
+    parametersDescription: 'decision: string, reason: string, impact: string, projectId?: string, responsible?: string, status?: string',
+    execute: async (params, context) => {
+      const targetProjectId = params.projectId || context.currentProject?.id;
+      if (!targetProjectId) {
+        return { success: false, message: 'Nenhum projeto ativo para registrar a decisão.' };
+      }
+
+      const decisionText = (params.decision || '').trim();
+      const reasonText = (params.reason || '').trim();
+      const impactText = (params.impact || '').trim();
+      const status: ProjectDecisionStatus = (params.status === 'EM DISCUSSÃO' ? 'EM DISCUSSÃO' : 'SUGESTÃO');
+
+      if (!decisionText) {
+        return { success: false, message: 'Texto da decisão é obrigatório.' };
+      }
+
+      const newDecision: ProjectDecision = {
+        id: `dec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        projectId: targetProjectId,
+        decision: decisionText,
+        reason: reasonText || 'Alinhamento arquitetural do projeto.',
+        impact: impactText || 'Garantir estabilidade e manutenibilidade.',
+        date: new Date().toLocaleDateString(),
+        responsible: params.responsible || 'Agente Arquiteto / Usuário',
+        status,
+      };
+
+      saveProjectDecision(newDecision);
+      return {
+        success: true,
+        actionExecuted: 'proposed_decision',
+        message: `Proposta de decisão registrada com status [${status}]: "${decisionText}". Aguardando aprovação para execução.`,
+        data: newDecision,
+      };
+    },
+  },
+
+  project_approve_decision: {
+    name: 'project_approve_decision',
+    description:
+      'Aprova uma decisão do projeto avançando seu estado para APROVADA ou EM EXECUÇÃO.',
+    riskLevel: 'LOW_RISK_WRITE',
+    requiredPermission: 'USER',
+    parametersDescription: 'decisionId: string, projectId?: string, newStatus?: string',
+    execute: async (params, context) => {
+      const targetProjectId = params.projectId || context.currentProject?.id;
+      const decisionId = params.decisionId;
+      if (!targetProjectId || !decisionId) {
+        return { success: false, message: 'Identificador do projeto e da decisão são obrigatórios.' };
+      }
+
+      const newStatus: ProjectDecisionStatus = (params.newStatus as ProjectDecisionStatus) || 'APROVADA';
+      const updated = updateProjectDecisionStatus(decisionId, targetProjectId, newStatus);
+      return {
+        success: true,
+        actionExecuted: 'approved_decision',
+        message: `Decisão atualizada para o estado [${newStatus}]. Aprovada para execução.`,
+        data: updated,
+      };
+    },
+  },
+
+  project_add_mission: {
+    name: 'project_add_mission',
+    description: 'Adiciona ou programa uma nova missão de execução no projeto.',
+    riskLevel: 'LOW_RISK_WRITE',
+    requiredPermission: 'USER',
+    parametersDescription: 'title: string, description: string, priority?: string, projectId?: string, notes?: string',
+    execute: async (params, context) => {
+      const targetProjectId = params.projectId || context.currentProject?.id;
+      if (!targetProjectId) {
+        return { success: false, message: 'Nenhum projeto ativo para registrar a missão.' };
+      }
+
+      const title = (params.title || '').trim();
+      const description = (params.description || '').trim();
+      if (!title) {
+        return { success: false, message: 'Título da missão é obrigatório.' };
+      }
+
+      const newMission: ProjectMission = {
+        id: `mis-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        projectId: targetProjectId,
+        title,
+        description: description || title,
+        status: 'Pendente',
+        priority: params.priority || 'Alta',
+        createdAt: new Date().toLocaleDateString(),
+        notes: params.notes || 'Gerada pelo Agente Executor',
+      };
+
+      saveProjectMission(newMission);
+      return {
+        success: true,
+        actionExecuted: 'added_mission',
+        message: `Missão "${title}" (Prioridade: ${newMission.priority}) adicionada ao backlog ativo do projeto.`,
+        data: newMission,
+      };
+    },
+  },
+
+  project_save_deliverable: {
+    name: 'project_save_deliverable',
+    description:
+      'Registra um entregável, componente ou código gerado pelo Agente Executor no projeto.',
+    riskLevel: 'LOW_RISK_WRITE',
+    requiredPermission: 'USER',
+    parametersDescription: 'name: string, type: string, description: string, content?: string, projectId?: string',
+    execute: async (params, context) => {
+      const targetProjectId = params.projectId || context.currentProject?.id;
+      if (!targetProjectId) {
+        return { success: false, message: 'Nenhum projeto ativo para salvar o entregável.' };
+      }
+
+      const name = (params.name || '').trim();
+      const type = (params.type || 'Componente').trim();
+      const description = (params.description || '').trim();
+      if (!name) {
+        return { success: false, message: 'Nome do entregável é obrigatório.' };
+      }
+
+      const deliverable: ProjectDeliverable = {
+        id: `deliv-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        projectId: targetProjectId,
+        name,
+        type,
+        description: description || name,
+        content: params.content,
+        createdAt: new Date().toLocaleDateString(),
+      };
+
+      saveProjectDeliverable(deliverable);
+      return {
+        success: true,
+        actionExecuted: 'saved_deliverable',
+        message: `Entregável "${name}" (${type}) registrado nos artefatos do projeto.`,
+        data: deliverable,
+      };
+    },
+  },
+
+  project_record_test: {
+    name: 'project_record_test',
+    description: 'Registra o resultado de um teste executado no projeto (Passou, Falhou ou Pendente).',
+    riskLevel: 'LOW_RISK_WRITE',
+    requiredPermission: 'USER',
+    parametersDescription: 'name: string, type: string, result: string, details: string, projectId?: string',
+    execute: async (params, context) => {
+      const targetProjectId = params.projectId || context.currentProject?.id;
+      if (!targetProjectId) {
+        return { success: false, message: 'Nenhum projeto ativo para registrar o teste.' };
+      }
+
+      const name = (params.name || '').trim();
+      const type: any = params.type || 'Funcional';
+      const result: any = params.result === 'Falhou' ? 'Falhou' : params.result === 'Pendente' ? 'Pendente' : 'Passou';
+      const details = (params.details || '').trim();
+
+      const testItem: ProjectTest = {
+        id: `test-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        projectId: targetProjectId,
+        name: name || 'Validação de Funcionalidade',
+        type,
+        result,
+        details: details || 'Executado pelo Agente Executor.',
+        date: new Date().toLocaleDateString(),
+      };
+
+      saveProjectTest(testItem);
+      return {
+        success: true,
+        actionExecuted: 'recorded_test',
+        message: `Teste [${type}] "${testItem.name}": Resultado [${result}]. Registrado no histórico de qualidade.`,
+        data: testItem,
+      };
+    },
+  },
+
+  project_record_pedagogy: {
+    name: 'project_record_pedagogy',
+    description:
+      'Registra a explicação pedagógica estruturada do Agente Professor (O que foi feito, Por que, Como funciona, O que foi testado, O que falta, O que pode evoluir).',
+    riskLevel: 'LOW_RISK_WRITE',
+    requiredPermission: 'USER',
+    parametersDescription: 'title: string, whatWasDone: string, whyDone: string, howItWorks: string, whatWasTested: string, whatWasChanged: string, whatIsMissing: string, whatCanEvolve: string, projectId?: string',
+    execute: async (params, context) => {
+      const targetProjectId = params.projectId || context.currentProject?.id;
+      if (!targetProjectId) {
+        return { success: false, message: 'Nenhum projeto ativo para salvar a explicação pedagógica.' };
+      }
+
+      const item: ProjectPedagogicalExplanation = {
+        id: `ped-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        projectId: targetProjectId,
+        title: params.title || 'Explicação Técnica da Implementação',
+        whatWasDone: params.whatWasDone || '',
+        whyDone: params.whyDone || '',
+        howItWorks: params.howItWorks || '',
+        whatWasTested: params.whatWasTested || '',
+        whatWasChanged: params.whatWasChanged || '',
+        whatIsMissing: params.whatIsMissing || '',
+        whatCanEvolve: params.whatCanEvolve || '',
+        date: new Date().toLocaleDateString(),
+      };
+
+      saveProjectPedagogy(item);
+      return {
+        success: true,
+        actionExecuted: 'saved_pedagogy',
+        message: `Explicação pedagógica "${item.title}" arquivada com sucesso para consulta da equipe.`,
+        data: item,
+      };
+    },
+  },
+
+  project_register_version: {
+    name: 'project_register_version',
+    description: 'Registra uma nova versão ou marco de implantação no projeto (V1.0, V1.1, etc.).',
+    riskLevel: 'LOW_RISK_WRITE',
+    requiredPermission: 'USER',
+    parametersDescription: 'version: string, changes: string, reason: string, result: string, deployStatus?: string, projectId?: string',
+    execute: async (params, context) => {
+      const targetProjectId = params.projectId || context.currentProject?.id;
+      if (!targetProjectId) {
+        return { success: false, message: 'Nenhum projeto ativo para registrar versão.' };
+      }
+
+      const version = (params.version || 'V1.0').trim();
+      const changes = (params.changes || '').trim();
+      const reason = (params.reason || 'Evolução planejada').trim();
+      const result = (params.result || 'Implementado com sucesso').trim();
+
+      const verItem: ProjectVersion = {
+        id: `ver-${version.toLowerCase()}-${Date.now()}`,
+        projectId: targetProjectId,
+        version,
+        date: new Date().toLocaleDateString(),
+        changes: changes || 'Melhorias de código e novas funcionalidades.',
+        reason,
+        result,
+        status: 'Lançada',
+      };
+
+      saveProjectVersion(verItem);
+
+      if (params.deployStatus) {
+        const depItem: ProjectDeployment = {
+          id: `dep-${Date.now()}`,
+          projectId: targetProjectId,
+          version,
+          date: new Date().toLocaleDateString(),
+          status: params.deployStatus === 'Falha' ? 'Falha' : 'Sucesso',
+          changes: verItem.changes,
+          result: verItem.result,
+          notes: 'Implantação registrada pelo Agente de Evolução.',
+        };
+        saveProjectDeployment(depItem);
+      }
+
+      return {
+        success: true,
+        actionExecuted: 'registered_version',
+        message: `Versão [${version}] registrada com sucesso no ciclo de evolução do projeto.`,
+        data: verItem,
+      };
+    },
+  },
+
+  project_get_state: {
+    name: 'project_get_state',
+    description: 'Obtém o estado completo e consolidado de um projeto (tarefas, decisões, requisitos, entregáveis, etc.).',
+    riskLevel: 'READ',
+    requiredPermission: 'GUEST',
+    parametersDescription: 'projectId?: string',
+    execute: async (params, context) => {
+      const targetProjectId = params.projectId || context.currentProject?.id;
+      if (!targetProjectId) {
+        return { success: false, message: 'Nenhum projeto especificado ou ativo no momento.' };
+      }
+
+      const state = getCompleteProjectState(targetProjectId);
+      return {
+        success: true,
+        actionExecuted: 'retrieved_project_state',
+        message: `Estado do projeto "${state.project.name}" recuperado com sucesso (${state.tasks.length} missões, ${state.decisions.length} decisões, versão ${state.currentVersion}).`,
+        data: state,
+      };
+    },
+  },
 };
 
 /**
@@ -450,7 +851,7 @@ export const HUB_TOOLS: Record<string, HubToolDefinition> = {
 export async function executeHubTool(
   toolName: string,
   params: any,
-  context: HubToolContext
+  context?: Partial<HubToolContext>
 ): Promise<ToolExecutionResult> {
   const tool = HUB_TOOLS[toolName];
   if (!tool) {
@@ -460,6 +861,27 @@ export async function executeHubTool(
     };
   }
 
+  const effectiveContext: HubToolContext = {
+    currentUserRole: context?.currentUserRole || 'OPERATOR',
+    currentRoute: context?.currentRoute || 'projects',
+    allProjects: context?.allProjects || getProjects(),
+    allIdeas: context?.allIdeas || [],
+    allStudies: context?.allStudies || [],
+    catalog: context?.catalog || [],
+    navigationHandlers: context?.navigationHandlers || {
+      navigateToView: () => {},
+      openProject: () => {},
+      openAddIA: () => {},
+      openGlobalSearch: () => {},
+      openCompare: () => {},
+      openAIDetail: () => {},
+    },
+    dataMutationHandlers: context?.dataMutationHandlers || {
+      saveIA: async () => {},
+    },
+    ...context,
+  };
+
   // Validação de Permissão (Hierarquia: ADMIN > OPERATOR > USER > GUEST)
   const roleHierarchy: Record<UserRole, number> = {
     ADMIN: 4,
@@ -468,19 +890,19 @@ export async function executeHubTool(
     GUEST: 1,
   };
 
-  const userRank = roleHierarchy[context.currentUserRole] || 1;
+  const userRank = roleHierarchy[effectiveContext.currentUserRole] || 1;
   const reqRank = roleHierarchy[tool.requiredPermission] || 2;
 
   if (userRank < reqRank) {
     return {
       success: false,
-      message: `Permissão insuficiente. Esta ação requer perfil "${tool.requiredPermission}", mas seu perfil atual é "${context.currentUserRole}".`,
+      message: `Permissão insuficiente. Esta ação requer perfil "${tool.requiredPermission}", mas seu perfil atual é "${effectiveContext.currentUserRole}".`,
     };
   }
 
   // Execução direta para ações READ, NAVIGATION e LOW_RISK_WRITE solicitadas
   try {
-    return await tool.execute(params, context);
+    return await tool.execute(params, effectiveContext);
   } catch (err: any) {
     return {
       success: false,

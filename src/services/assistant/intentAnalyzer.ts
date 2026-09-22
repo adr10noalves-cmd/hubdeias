@@ -111,7 +111,7 @@ export function analyzeUserIntent(
   let isAskingToOpenProject = false;
   let suggestedToolCall: { name: string; params: any } | undefined;
 
-  // Pedido explícito de abrir projeto: "abra meu projeto X", "quero trabalhar no projeto X", "ir para o projeto X"
+  // Pedido explícito de abrir projeto: "abra meu projeto X", "quero trabalhar no projeto X", "vamos continuar o projeto X", etc.
   if (
     (lower.includes('abra o projeto') ||
       lower.includes('abra meu projeto') ||
@@ -119,7 +119,13 @@ export function analyzeUserIntent(
       lower.includes('trabalhar no projeto') ||
       lower.includes('me leve ao projeto') ||
       lower.includes('volte para meu projeto') ||
-      lower.includes('voltar para o projeto')) &&
+      lower.includes('voltar para o projeto') ||
+      lower.includes('vamos continuar') ||
+      lower.includes('continuar o projeto') ||
+      lower.includes('continuar meu projeto') ||
+      lower.includes('continuar meu sistema') ||
+      lower.includes('continuar o sistema') ||
+      lower.includes('abrir o sistema')) &&
     matchedProjectId
   ) {
     isAskingToOpenProject = true;
@@ -127,6 +133,31 @@ export function analyzeUserIntent(
       name: 'open_project',
       params: { projectId: matchedProjectId, projectName: matchedProjectTitle },
     };
+  }
+
+  // Pedido de criação direta de projeto: "criar um projeto de...", "quero criar um projeto chamado..."
+  if (
+    !suggestedToolCall &&
+    (lower.startsWith('criar projeto') ||
+      lower.startsWith('novo projeto') ||
+      lower.includes('quero criar um projeto') ||
+      lower.includes('vamos criar um projeto') ||
+      lower.includes('iniciar novo projeto'))
+  ) {
+    const rawClean = text
+      .replace(/^(quero criar um projeto chamado|quero criar um projeto de|quero criar um projeto|vamos criar um projeto chamado|vamos criar um projeto|criar projeto chamado|criar projeto de|criar projeto|novo projeto chamado|novo projeto de|novo projeto|iniciar novo projeto)/i, '')
+      .replace(/^[:\s-]+/, '')
+      .trim();
+
+    if (rawClean.length >= 3) {
+      suggestedToolCall = {
+        name: 'project_create_or_attach',
+        params: {
+          projectName: rawClean.split(/[.,;\n]/)[0].trim(),
+          objective: rawClean,
+        },
+      };
+    }
   }
 
   // Pedidos de navegação entre telas: "me leve aos projetos", "ir para catálogo", "ver estudos", etc.
