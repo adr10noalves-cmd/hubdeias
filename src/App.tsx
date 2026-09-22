@@ -39,6 +39,7 @@ import { ProjectsManager } from './components/strategic/ProjectsManager';
 import { ProjectDetailView } from './components/strategic/ProjectDetailView';
 import { SystemMasterView } from './components/strategic/SystemMasterView';
 import { MasterTutorView } from './components/strategic/MasterTutorView';
+import { UniversalStudioView } from './components/strategic/UniversalStudioView';
 import { getProjects, saveSingleProject, deleteProject } from './services/projectsService';
 import {
   subscribeToIdeas,
@@ -850,6 +851,13 @@ export default function App() {
               }}
             />
           </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* VISÃO: ESTÚDIO UNIVERSAL & ARTIFACT ENGINE */}
+        {/* ========================================================================= */}
+        {currentHubView === 'studio' && (
+          <UniversalStudioView />
         )}
 
         {/* ========================================================================= */}

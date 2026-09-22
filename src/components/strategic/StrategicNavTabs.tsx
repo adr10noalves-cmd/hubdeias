@@ -11,7 +11,7 @@ import {
   Bot,
 } from 'lucide-react';
 
-export type MainHubView = 'catalog' | 'ideas' | 'projects' | 'studies' | 'diary' | 'dashboard' | 'master' | 'receptor';
+export type MainHubView = 'catalog' | 'ideas' | 'projects' | 'studies' | 'diary' | 'dashboard' | 'master' | 'receptor' | 'studio';
 
 interface StrategicNavTabsProps {
   currentView: MainHubView;
@@ -77,6 +77,20 @@ export const StrategicNavTabs: React.FC<StrategicNavTabsProps> = ({
         >
           <Bot className="w-4 h-4 text-cyan-400" />
           <span>Receptor Mestre</span>
+        </button>
+
+        {/* Aba 0.7: Estúdio Universal */}
+        <button
+          type="button"
+          onClick={() => onChangeView('studio')}
+          className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap ${
+            currentView === 'studio'
+              ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-[0_0_20px_rgba(168,85,247,0.5)]'
+              : 'text-purple-300 hover:text-white hover:bg-slate-800 border border-purple-500/30'
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-purple-400" />
+          <span>Estúdio Universal</span>
         </button>
 
         {/* Aba 1: Catálogo de IAs */}
