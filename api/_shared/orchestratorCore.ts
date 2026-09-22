@@ -16,6 +16,7 @@ import {
   GROQ_MODELS,
   DEFAULT_GROQ_MODEL,
 } from './groqAdapter.js';
+import { applyGlobalPolicy } from './globalAICommunicationPolicy.js';
 
 /**
  * CAMADA CENTRAL DE EXECUÇÃO DE MOTORES
@@ -29,12 +30,14 @@ export async function orchestrateExecution(
   const {
     provider = 'GEMINI',
     modelId,
-    systemPrompt = 'Você é o Núcleo Inteligente de Orquestração do Hub de IAs. Responda de forma clara, técnica e didática.',
+    systemPrompt = 'Você é o Núcleo Inteligente de Orquestração do Hub de IAs.',
     userPrompt,
     complexityLevel = 3,
     allowFallback = true,
     jsonMode = false,
   } = request;
+
+  const resolvedSystemPrompt = applyGlobalPolicy(systemPrompt);
 
   if (!userPrompt || userPrompt.trim() === '') {
     return {
@@ -66,7 +69,7 @@ export async function orchestrateExecution(
   // 1. Tentar Provedor Primário
   if (primaryProvider === 'GEMINI') {
     const geminiRes = await executeGemini({
-      systemPrompt,
+      systemPrompt: resolvedSystemPrompt,
       userPrompt,
       modelId: modelId || DEFAULT_GEMINI_MODEL,
       jsonMode,
@@ -90,7 +93,7 @@ export async function orchestrateExecution(
     // 2. Acionar Fallback para Groq se permitido
     if (allowFallback) {
       const groqRes = await executeGroq({
-        systemPrompt,
+        systemPrompt: resolvedSystemPrompt,
         userPrompt,
         modelId: DEFAULT_GROQ_MODEL,
         jsonMode,
@@ -154,7 +157,7 @@ export async function orchestrateExecution(
   } else {
     // Provedor Primário: GROQ
     const groqRes = await executeGroq({
-      systemPrompt,
+      systemPrompt: resolvedSystemPrompt,
       userPrompt,
       modelId: modelId || DEFAULT_GROQ_MODEL,
       jsonMode,
@@ -178,7 +181,7 @@ export async function orchestrateExecution(
     // Fallback para Gemini
     if (allowFallback) {
       const geminiRes = await executeGemini({
-        systemPrompt,
+        systemPrompt: resolvedSystemPrompt,
         userPrompt,
         modelId: DEFAULT_GEMINI_MODEL,
         jsonMode,
