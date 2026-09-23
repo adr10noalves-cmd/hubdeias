@@ -12,6 +12,7 @@ import {
   Folder,
   FileText,
   Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   ArtifactItem,
@@ -33,6 +34,7 @@ export const UniversalStudioView: React.FC = () => {
   const [promptInput, setPromptInput] = useState('');
   const [generationType, setGenerationType] = useState<'html' | 'image' | 'code'>('html');
   const [pipelineStatus, setPipelineStatus] = useState<string>('');
+  const [generationError, setGenerationError] = useState<string | null>(null);
 
   useEffect(() => {
     const loaded = getStoredArtifacts();
@@ -47,24 +49,25 @@ export const UniversalStudioView: React.FC = () => {
     if (!promptInput.trim() || isGenerating) return;
 
     setIsGenerating(true);
+    setGenerationError(null);
     const text = promptInput.trim();
     setPromptInput('');
 
     try {
       if (generationType === 'image') {
-        setPipelineStatus('Executando motor de geração visual nativa real (source: generated)...');
+        setPipelineStatus('Verificando adapter multimodal de geração visual...');
         const imgResult = await runImageGenerationPipeline(text);
 
         if (!imgResult.success || !imgResult.imageBase64) {
-          throw new Error(imgResult.error || 'Falha na geração de imagem nativa');
+          throw new Error(imgResult.error || 'A geração de imagens por IA ainda não está disponível nesta configuração.');
         }
 
-        setPipelineStatus('Validando arquivo gerado, MIME type e criptografia base64...');
+        // Se porventura houver sucesso real (futuro)
         const title = text.slice(0, 30) + (text.length > 30 ? '...' : '');
         const newArtifact = saveArtifact({
           title,
           type: 'image',
-          content: `<div style="background:#090d16;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;color:white;font-family:sans-serif;padding:20px;text-align:center;"><img src="${imgResult.imageBase64}" style="max-width:100%;max-height:80vh;border-radius:12px;box-shadow:0 20px 50px rgba(0,0,0,0.8);border:2px solid #4c1d95;" /><div style="margin-top:20px;background:#1e293b;padding:10px 20px;border-radius:8px;font-size:12px;color:#34d399;font-weight:bold;">✓ Asset gerado nativamente (source: generated) | Provider: ${imgResult.provider}</div></div>`,
+          content: `<img src="${imgResult.imageBase64}" />`,
           origin: 'Estúdio Universal (Native Image Engine)',
           assets: {
             [imgResult.filename]: imgResult.imageBase64,
@@ -73,7 +76,6 @@ export const UniversalStudioView: React.FC = () => {
             source: 'generated',
             provider: imgResult.provider,
             model: imgResult.model,
-            mimeType: imgResult.mimeType,
           },
         });
 
@@ -88,7 +90,7 @@ export const UniversalStudioView: React.FC = () => {
           body: JSON.stringify({
             provider: 'GEMINI',
             modelId: 'gemini-3.8-flash',
-            systemPrompt: `Você é o Arquiteto Chefe do Estúdio Universal. Crie um sistema funcional completo em HTML/CSS/Tailwind e JavaScript com persistência local (localStorage), dashboards interativos, cadastros, formulários funcionais, filtros e navegação completa. Para quaisquer banners ou imagens ilustrativas necessárias no layout, utilize imagens geradas nativamente ou ícones vectoriais modernos em SVG embutidos, sem depender de URLs externas de stock.`,
+            systemPrompt: `Você é o Arquiteto Chefe do Estúdio Universal. Crie um sistema funcional completo em HTML/CSS/Tailwind e JavaScript com persistência local (localStorage), dashboards interativos, cadastros, formulários funcionais, filtros e navegação completa.`,
             userPrompt: text,
             complexityLevel: 5,
           }),
@@ -102,21 +104,16 @@ export const UniversalStudioView: React.FC = () => {
           rawContent = raw.text || `<h1>${text}</h1>`;
         }
 
-        setPipelineStatus('Executando Revisor de Código, Quality Gate e Geração de Asset Visual Nativo...');
+        setPipelineStatus('Executando Revisor de Código e Quality Gate...');
         const pipelineRes = runCodeCreationPipeline(rawContent, text);
-
-        // Gerar asset nativo real para o projeto HTML integrado
-        const nativeHeroImg = await runImageGenerationPipeline(`Banner para ${text}`);
 
         const title = text.slice(0, 30) + (text.length > 30 ? '...' : '');
         const newArtifact = saveArtifact({
           title,
           type: generationType,
           content: pipelineRes.code,
-          origin: 'Estúdio Universal (Integrated Pipeline)',
-          assets: {
-            'hero_original.svg': nativeHeroImg.imageBase64 || '',
-          },
+          origin: 'Estúdio Universal (Code Pipeline)',
+          assets: {},
           metadata: {
             qualityGatePassed: pipelineRes.qualityGatePassed,
             issuesFound: pipelineRes.issuesFound,
@@ -128,8 +125,9 @@ export const UniversalStudioView: React.FC = () => {
         setArtifacts(updated);
         setSelectedArtifact(newArtifact);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setGenerationError(err?.message || 'A geração de imagens por IA ainda não está disponível nesta configuração.');
     } finally {
       setIsGenerating(false);
       setPipelineStatus('');
@@ -145,8 +143,7 @@ export const UniversalStudioView: React.FC = () => {
     if (!selectedArtifact) return;
     exportProjectZipSimulation(selectedArtifact.title, {
       'index.html': selectedArtifact.content,
-      'README.md': `# ${selectedArtifact.title}\nGerado via Estúdio Universal (100% Native Generated) em ${selectedArtifact.createdAt}`,
-      'assets/hero_original.svg': (Object.values(selectedArtifact.assets || {})[0] as string) || '',
+      'README.md': `# ${selectedArtifact.title}\nGerado via Estúdio Universal em ${selectedArtifact.createdAt}`,
     });
   };
 
@@ -163,12 +160,12 @@ export const UniversalStudioView: React.FC = () => {
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-900 text-purple-300 border border-purple-700 uppercase tracking-widest">
-                  Estúdio Universal — Geração Nativista (Source: Generated)
+                  Estúdio Universal — Sem Simulação Visual Falsa
                 </span>
               </div>
               <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Estúdio de Criação Avançada</h1>
               <p className="text-slate-400 text-xs sm:text-sm max-w-2xl leading-relaxed">
-                Geração de sistemas funcionais e imagens reais nativas sem dependência de stock externo (Unsplash/Pexels).
+                Criação de sistemas e páginas funcionais. Geração visual por IA raster nativa reporta indisponibilidade em vez de simular SVGs ou stock externo.
               </p>
             </div>
           </div>
@@ -192,8 +189,8 @@ export const UniversalStudioView: React.FC = () => {
           onChange={(e) => setGenerationType(e.target.value as any)}
           className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-xs font-bold text-slate-200 focus:outline-none focus:border-purple-500 shrink-0"
         >
-          <option value="html">Sistema / Página HTML + Hero Nativista</option>
-          <option value="image">Imagem Nativista Real (source: generated)</option>
+          <option value="html">Sistema / Página HTML</option>
+          <option value="image">Imagem por IA (GENERATE_IMAGE)</option>
           <option value="code">Código Aplicativo</option>
         </select>
 
@@ -201,7 +198,7 @@ export const UniversalStudioView: React.FC = () => {
           type="text"
           value={promptInput}
           onChange={(e) => setPromptInput(e.target.value)}
-          placeholder={`Ex: "Crie uma imagem 16:9 de um mamute usando capacete branco e colete refletivo no canteiro de obras"`}
+          placeholder={`Ex: "Crie um cachorro herói" ou "Crie um sistema de inspeções"`}
           className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:border-purple-500"
         />
 
@@ -211,7 +208,7 @@ export const UniversalStudioView: React.FC = () => {
           className="px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 disabled:opacity-50 text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition-all shadow-lg shadow-purple-500/20 shrink-0 cursor-pointer"
         >
           {isGenerating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-          <span>{isGenerating ? 'Processando Nativista...' : 'Gerar Artefato'}</span>
+          <span>{isGenerating ? 'Processando...' : 'Gerar Artefato'}</span>
         </button>
       </form>
 
@@ -222,18 +219,28 @@ export const UniversalStudioView: React.FC = () => {
         </div>
       )}
 
+      {generationError && (
+        <div className="bg-amber-950/40 border border-amber-500/40 rounded-xl p-4 text-xs text-amber-200 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <span className="font-bold text-amber-300 uppercase tracking-wide">Aviso do Sistema (Geração de Imagem Indisponível)</span>
+            <p className="leading-relaxed">{generationError}</p>
+          </div>
+        </div>
+      )}
+
       {/* Workspace Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Artifacts List */}
         <div className="lg:col-span-4 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3 h-[600px] overflow-y-auto scrollbar-thin">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Artefatos (Source: Generated)</span>
+            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Artefatos Gerados</span>
             <span className="text-xs px-2 py-0.5 rounded-md bg-purple-950 text-purple-300 border border-purple-800">{artifacts.length}</span>
           </div>
 
           {artifacts.length === 0 ? (
             <div className="text-center py-12 text-slate-500 text-xs">
-              Nenhum artefato criado ainda. Use a barra acima para gerar sua imagem nativista ou sistema.
+              Nenhum artefato criado ainda. Use a barra acima para gerar um sistema ou página.
             </div>
           ) : (
             artifacts.map((art) => (
@@ -248,7 +255,7 @@ export const UniversalStudioView: React.FC = () => {
               >
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="font-bold text-purple-300 uppercase">{art.type}</span>
-                  <span className="text-emerald-400 font-bold text-[10px]">source: generated</span>
+                  <span className="text-slate-500">v{art.version}</span>
                 </div>
                 <div className="font-semibold text-white text-xs sm:text-sm truncate">{art.title}</div>
                 <div className="flex items-center justify-between text-[10px] text-slate-400">
@@ -268,7 +275,7 @@ export const UniversalStudioView: React.FC = () => {
               <div className="px-5 py-3.5 border-b border-slate-800 bg-slate-950/80 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-white text-sm">{selectedArtifact.title}</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">source: generated</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">Versão {selectedArtifact.version}</span>
                 </div>
 
                 <div className="flex items-center gap-1.5">
@@ -310,7 +317,7 @@ export const UniversalStudioView: React.FC = () => {
               <div className="flex-1 overflow-hidden bg-slate-950 flex flex-col">
                 {activeTab === 'preview' && (
                   <div className="flex-1 bg-white relative overflow-auto">
-                    {selectedArtifact.type === 'html' || selectedArtifact.type === 'image' ? (
+                    {selectedArtifact.type === 'html' ? (
                       <iframe
                         srcDoc={selectedArtifact.content}
                         title={selectedArtifact.title}
@@ -335,23 +342,17 @@ export const UniversalStudioView: React.FC = () => {
 
                 {activeTab === 'assets' && (
                   <div className="flex-1 p-6 overflow-auto space-y-4 text-slate-200">
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Assets Gerados Nativamente (source: generated)</h3>
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Assets Vinculados</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {Object.entries(selectedArtifact.assets || {}).map(([name, assetUrl]) => {
                         const urlStr = assetUrl as string;
                         return (
-                        <div key={name} className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-purple-300">{name}</span>
-                            <span className="text-[10px] bg-emerald-950 text-emerald-300 px-2 py-0.5 rounded border border-emerald-800">generated</span>
-                          </div>
-                          {urlStr && urlStr.startsWith('data:image') ? (
-                            <img src={urlStr} alt={name} className="w-full h-32 object-contain bg-slate-950 rounded-lg border border-slate-800 p-2" />
-                          ) : (
+                          <div key={name} className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                            <div className="text-xs font-bold text-purple-300">{name}</div>
                             <div className="p-3 bg-slate-950 rounded text-xs font-mono text-slate-400 truncate">{urlStr}</div>
-                          )}
-                        </div>
-                      );})}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
