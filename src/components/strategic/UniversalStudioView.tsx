@@ -55,27 +55,31 @@ export const UniversalStudioView: React.FC = () => {
 
     try {
       if (generationType === 'image') {
-        setPipelineStatus('Verificando adapter multimodal de geração visual...');
+        setPipelineStatus('Executando geração visual real via Cloudflare Workers AI...');
         const imgResult = await runImageGenerationPipeline(text);
 
         if (!imgResult.success || !imgResult.imageBase64) {
-          throw new Error(imgResult.error || 'A geração de imagens por IA ainda não está disponível nesta configuração.');
+          throw new Error(imgResult.error || 'A geração de imagens por IA falhou na resposta do provider.');
         }
 
-        // Se porventura houver sucesso real (futuro)
+        const rawBase64 = imgResult.imageBase64.includes(',') ? imgResult.imageBase64.split(',')[1] : imgResult.imageBase64;
+        const mimeType = imgResult.mimeType || 'image/png';
+        const dataUri = `data:${mimeType};base64,${rawBase64}`;
+
         const title = text.slice(0, 30) + (text.length > 30 ? '...' : '');
         const newArtifact = saveArtifact({
           title,
           type: 'image',
-          content: `<img src="${imgResult.imageBase64}" />`,
-          origin: 'Estúdio Universal (Native Image Engine)',
+          content: dataUri,
+          origin: 'Estúdio Universal (Cloudflare Workers AI)',
           assets: {
-            [imgResult.filename]: imgResult.imageBase64,
+            [imgResult.filename || 'generated_image.png']: dataUri,
           },
           metadata: {
             source: 'generated',
             provider: imgResult.provider,
             model: imgResult.model,
+            mimeType,
           },
         });
 
@@ -323,10 +327,24 @@ export const UniversalStudioView: React.FC = () => {
                         title={selectedArtifact.title}
                         className="w-full h-full border-0"
                       />
+                    ) : selectedArtifact.type === 'image' ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-slate-950 overflow-auto space-y-4">
+                        <div className="relative max-w-4xl max-h-[72vh] overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-slate-900 flex items-center justify-center p-2">
+                          <img
+                            src={selectedArtifact.content.startsWith('data:') || selectedArtifact.content.startsWith('http') ? selectedArtifact.content : `data:${selectedArtifact.metadata?.mimeType || 'image/png'};base64,${selectedArtifact.content}`}
+                            alt={selectedArtifact.title}
+                            className="max-w-full max-h-[68vh] object-contain rounded-xl"
+                          />
+                        </div>
+                        <div className="text-xs text-slate-400 flex items-center gap-3">
+                          <span className="px-2.5 py-1 rounded-lg bg-purple-950/60 text-purple-300 border border-purple-800/60 font-mono">Provider: {selectedArtifact.metadata?.provider || 'cloudflare'}</span>
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-slate-300 font-mono border border-slate-800">Model: {selectedArtifact.metadata?.model || 'flux-1-schnell'}</span>
+                        </div>
+                      </div>
                     ) : (
-                      <div className="p-8 text-slate-900 space-y-4">
+                      <div className="p-8 text-slate-950 space-y-4 bg-slate-950 text-slate-100 min-h-full">
                         <h2 className="text-xl font-bold">{selectedArtifact.title}</h2>
-                        <div className="p-4 bg-slate-100 rounded-xl whitespace-pre-wrap text-sm font-mono">
+                        <div className="p-4 bg-slate-900 rounded-xl whitespace-pre-wrap text-xs font-mono border border-slate-800">
                           {selectedArtifact.content}
                         </div>
                       </div>

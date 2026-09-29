@@ -70,8 +70,30 @@ export async function exportArtifactAsFile(artifact: ArtifactItem) {
     mime = 'application/json;charset=utf-8';
     ext = 'json';
   } else if (artifact.type === 'image') {
-    mime = 'image/png';
+    mime = artifact.metadata?.mimeType || 'image/png';
     ext = 'png';
+    try {
+      let b64 = artifact.content;
+      if (b64.includes(',')) b64 = b64.split(',')[1];
+      const byteChars = atob(b64);
+      const byteNums = new Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) {
+        byteNums[i] = byteChars.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNums);
+      const blob = new Blob([byteArray], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${artifact.title.toLowerCase().replace(/[^a-z0-9]/g, '_')}_v${artifact.version}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      return;
+    } catch (e) {
+      console.warn('Erro ao decodificar imagem binária para download:', e);
+    }
   }
 
   const blob = new Blob([artifact.content], { type: mime });
