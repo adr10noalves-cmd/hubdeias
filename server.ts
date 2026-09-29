@@ -12,7 +12,7 @@ import {
 import { handleGroqCommand } from './api/_shared/commandHandler';
 import { GROQ_MODELS, DEFAULT_GROQ_MODEL, executeGroq } from './api/_shared/groqAdapter';
 import { GEMINI_MODELS, DEFAULT_GEMINI_MODEL, executeGemini } from './api/_shared/geminiAdapter';
-import { executeCloudflareImage } from './api/_shared/cloudflareImageAdapter';
+import { executeCloudflareImage, getCloudflareHealthDiagnostics } from './api/_shared/cloudflareImageAdapter';
 import {
   verifyPassword,
   hashPassword,
@@ -149,6 +149,12 @@ app.post('/api/image/generate', async (req, res) => {
       model: '@cf/black-forest-labs/flux-2-klein-4b',
     });
   }
+});
+
+// HEALTH CHECK SEGURO PARA CLOUDFLARE WORKERS AI
+app.get('/api/health/cloudflare-image', (req, res) => {
+  const diag = getCloudflareHealthDiagnostics();
+  res.json(diag);
 });
 
 // 6. RETROCOMPATIBILIDADE: DESCOBERTA E CURADORIA DE IAS
