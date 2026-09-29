@@ -1,6 +1,3 @@
-import fetch from 'node-fetch';
-import FormData from 'form-data';
-
 export interface CloudflareImageResult {
   success: boolean;
   imageBase64?: string;
@@ -17,6 +14,7 @@ export interface CloudflareImageResult {
 /**
   * Adaptador oficial para Geração de Imagem Nativa via Cloudflare Workers AI
   * Utiliza o modelo FLUX.2 Klein 4B (@cf/black-forest-labs/flux-2-klein-4b)
+  * Utiliza fetch e FormData nativos do Node.js (sem dependências externas de pacotes ESM).
   */
 export async function executeCloudflareImage(params: {
   prompt: string;
@@ -33,7 +31,7 @@ export async function executeCloudflareImage(params: {
       success: false,
       mimeType: '',
       filename: '',
-      error: 'As credenciais da Cloudflare Workers AI (CLOUDFLARE_ACCOUNT_ID e CLOUDFLARE_API_TOKEN) não estão configuradas. Insira sua Account ID e API Token nas Configurações do Hub.',
+      error: 'As credenciais da Cloudflare Workers AI (CLOUDFLARE_ACCOUNT_ID e CLOUDFLARE_API_TOKEN) não estão configuradas nas variáveis de ambiente da Vercel ou nas Configurações do Hub.',
       provider: 'cloudflare',
       model: '@cf/black-forest-labs/flux-2-klein-4b',
     };
@@ -55,9 +53,8 @@ export async function executeCloudflareImage(params: {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiToken.trim()}`,
-        ...formData.getHeaders(),
       },
-      body: formData as any,
+      body: formData,
     });
 
     if (!response.ok) {
