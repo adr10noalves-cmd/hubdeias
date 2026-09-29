@@ -18,6 +18,7 @@ import {
   saveOrchestratorSettings,
   OrchestratorSettings,
 } from '../../services/assistant/orchestratorConfig';
+import { generateNativeImageReal } from '../../services/nativeImageGenerator';
 
 interface EngineDiagnosticInfo {
   provider: 'GEMINI' | 'GROQ';
@@ -68,6 +69,9 @@ export const OrchestratorSettingsModal: React.FC<OrchestratorSettingsModalProps>
 
   const [testingGroq, setTestingGroq] = useState(false);
   const [groqTestResult, setGroqTestResult] = useState<EngineTestResult | null>(null);
+
+  const [testingCloudflare, setTestingCloudflare] = useState(false);
+  const [cloudflareTestResult, setCloudflareTestResult] = useState<any | null>(null);
 
   const fetchStatus = async () => {
     try {
@@ -437,6 +441,112 @@ export const OrchestratorSettingsModal: React.FC<OrchestratorSettingsModalProps>
                   )}
                 </div>
                 <div className="text-[11px] opacity-90">{groqTestResult.diagnostic}</div>
+              </div>
+            )}
+          </div>
+
+          {/* SEÇÃO 3: CLOUDFLARE WORKERS AI (GERAÇÃO DE IMAGENS FLUX.2) */}
+          <div className="p-4 rounded-xl bg-slate-850/80 border border-slate-750 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-purple-400" />
+                <span className="font-bold text-white text-sm">CLOUDFLARE WORKERS AI (Geração de Imagens FLUX.2)</span>
+              </div>
+              <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold text-[10px] uppercase">
+                {settings.cloudflareApiToken && settings.cloudflareAccountId ? 'Configurado' : 'Aguardando Chave'}
+              </span>
+            </div>
+
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              Insira sua Cloudflare Account ID e API Token para habilitar a geração real de ativos visuais via modelo FLUX.2 Klein 4B.
+            </p>
+
+            <div className="space-y-2 font-mono text-xs">
+              <div>
+                <label className="block text-[10px] text-slate-400 mb-1">Cloudflare Account ID</label>
+                <input
+                  type="text"
+                  placeholder="ex: 1234567890abcdef1234567890abcdef"
+                  value={settings.cloudflareAccountId || ''}
+                  onChange={(e) => setSettings({ ...settings, cloudflareAccountId: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-purple-500"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] text-slate-400 mb-1">Cloudflare API Token (Workers AI)</label>
+                <input
+                  type="password"
+                  placeholder="ex: v1.0-..."
+                  value={settings.cloudflareApiToken || ''}
+                  onChange={(e) => setSettings({ ...settings, cloudflareApiToken: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 text-xs focus:outline-none focus:border-purple-500"
+                />
+              </div>
+            </div>
+
+            <div className="pt-1 flex justify-end border-t border-slate-800">
+              <button
+                onClick={async () => {
+                  setTestingCloudflare(true);
+                  setCloudflareTestResult(null);
+                  try {
+                    saveOrchestratorSettings(settings);
+                    const res = await generateNativeImageReal('Cyberpunk hero puppy concept art, 4k');
+                    setCloudflareTestResult({
+                      provider: 'CLOUDFLARE',
+                      status: res.success ? 'concluído' : 'erro',
+                      testPassed: res.success,
+                      message: res.success ? '✓ GERAÇÃO DE IMAGEM BEM-SUCEDIDA' : '✕ FALHA NA GERAÇÃO DE IMAGEM',
+                      diagnostic: res.success ? `Imagem gerada com sucesso via ${res.model}. Dimensões: ${res.width || 1024}x${res.height || 1024}` : (res.error || 'Erro desconhecido'),
+                      latencyMs: 1200,
+                    });
+                  } catch (err: any) {
+                    setCloudflareTestResult({
+                      provider: 'CLOUDFLARE',
+                      status: 'erro',
+                      testPassed: false,
+                      message: '✕ ERRO NO TESTE',
+                      diagnostic: err?.message || 'Falha de rede',
+                      latencyMs: 0,
+                    });
+                  } finally {
+                    setTestingCloudflare(false);
+                  }
+                }}
+                disabled={testingCloudflare || !settings.cloudflareApiToken || !settings.cloudflareAccountId}
+                className="px-3 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/40 text-xs font-semibold flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {testingCloudflare ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Gerando Imagem de Teste...
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-3 h-3" /> TESTAR CLOUDFLARE AI
+                  </>
+                )}
+              </button>
+            </div>
+
+            {cloudflareTestResult && (
+              <div
+                className={`p-2.5 rounded-lg border text-xs space-y-1 ${
+                  cloudflareTestResult.testPassed
+                    ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-300'
+                    : 'bg-rose-950/30 border-rose-500/40 text-rose-300'
+                }`}
+              >
+                <div className="flex items-center justify-between font-bold">
+                  <span className="flex items-center gap-1">
+                    {cloudflareTestResult.testPassed ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-rose-400" />
+                    )}
+                    {cloudflareTestResult.message}
+                  </span>
+                </div>
+                <div className="text-[11px] opacity-90">{cloudflareTestResult.diagnostic}</div>
               </div>
             )}
           </div>

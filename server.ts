@@ -12,6 +12,7 @@ import {
 import { handleGroqCommand } from './api/_shared/commandHandler';
 import { GROQ_MODELS, DEFAULT_GROQ_MODEL, executeGroq } from './api/_shared/groqAdapter';
 import { GEMINI_MODELS, DEFAULT_GEMINI_MODEL, executeGemini } from './api/_shared/geminiAdapter';
+import { executeCloudflareImage } from './api/_shared/cloudflareImageAdapter';
 import {
   verifyPassword,
   hashPassword,
@@ -125,6 +126,27 @@ app.post('/api/groq/command', async (req, res) => {
       success: false,
       fallback: true,
       error: error?.message || 'Erro ao processar comando de IA.',
+    });
+  }
+});
+
+// GERAÇÃO REAL DE IMAGENS VIA CLOUDFLARE WORKERS AI (FLUX.2 KLEIN 4B)
+app.post('/api/image/generate', async (req, res) => {
+  const { prompt, width, height, accountId, apiToken } = req.body || {};
+  if (!prompt || typeof prompt !== 'string') {
+    res.status(400).json({ success: false, error: 'Parâmetro "prompt" é obrigatório para geração de imagem.' });
+    return;
+  }
+  try {
+    const result = await executeCloudflareImage({ prompt, width, height, accountId, apiToken });
+    res.json(result);
+  } catch (err: any) {
+    console.error('[Server /api/image/generate error]:', err);
+    res.status(500).json({
+      success: false,
+      error: err?.message || 'Erro interno ao gerar imagem.',
+      provider: 'cloudflare',
+      model: '@cf/black-forest-labs/flux-2-klein-4b',
     });
   }
 });

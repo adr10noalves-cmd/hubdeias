@@ -11,6 +11,8 @@ export interface OrchestratorSettings {
   fallbackEnabled: boolean;
   strictContextFiltering: boolean;
   maxMemoryTokens: number;
+  cloudflareApiToken?: string;
+  cloudflareAccountId?: string;
 }
 
 const STORAGE_KEY = 'hub_orchestrator_settings_v2';
@@ -28,6 +30,8 @@ export const DEFAULT_ORCHESTRATOR_SETTINGS: OrchestratorSettings = {
   fallbackEnabled: true,
   strictContextFiltering: true,
   maxMemoryTokens: 3500,
+  cloudflareApiToken: '',
+  cloudflareAccountId: '',
 };
 
 export function getOrchestratorSettings(): OrchestratorSettings {

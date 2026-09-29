@@ -1,4 +1,5 @@
 import { ArtifactItem } from './capabilityRegistryService';
+import { generateNativeImageReal } from './nativeImageGenerator';
 export type { ArtifactItem };
 
 const ARTIFACT_STORAGE_KEY = 'hub_universal_artifacts_v1';
@@ -50,11 +51,9 @@ export function saveArtifact(item: Omit<ArtifactItem, 'id' | 'version' | 'create
   return saved;
 }
 
-export function generateNativeImagePrompt(prompt: string): string {
-  // Simulação realista de geração de imagem via motor nativo do Hub baseada em Unsplash / SVG dinâmico de alta qualidade
-  const encoded = encodeURIComponent(prompt);
-  // Usar uma imagem de alta qualidade do Unsplash com base em palavras-chave ou fallback profissional
-  return `https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?auto=format&fit=crop&w=1200&q=80&sig=${Date.now()}`;
+export async function generateNativeImagePrompt(prompt: string) {
+  // GERAÇÃO REAL NATIVA VIA CLOUDFLARE WORKERS AI (FLUX.2 KLEIN 4B) — PROIBIDO UNSPLASH / STOCK
+  return await generateNativeImageReal(prompt);
 }
 
 export async function exportArtifactAsFile(artifact: ArtifactItem) {
