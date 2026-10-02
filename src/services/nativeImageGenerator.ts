@@ -1,23 +1,24 @@
-import { ArtifactItem } from './capabilityRegistryService';
-
 export interface GeneratedImageResult {
   success: boolean;
+  artifactType: 'image';
   imageBase64?: string;
   mimeType: string;
   filename: string;
   error?: string;
-  source: 'generated' | 'external' | 'search';
-  provider: string;
+  source: 'generated';
+  provider: 'cloudflare';
   model: string;
   width?: number;
   height?: number;
+  metadata?: any;
 }
 
 /**
- * ADAPTER DE GERAÇÃO VISUAL NATIVA REAL VIA CLOUDFLARE WORKERS AI
- * Com Trace ID e Diagnóstico Seguro [CLOUDFLARE IMAGE DEBUG]
+ * ADAPTER OFICIAL DE GERAÇÃO VISUAL NATIVA REAL VIA CLOUDFLARE WORKERS AI (FLUX.1 SCHNELL)
+ * Executa estritamente a chamada server-side: POST /api/image/generate
+ * Sem fallback para SVG, Canvas, Unsplash ou placeholders.
  */
-export async function generateNativeImageReal(prompt: string, width = 1024, height = 1024): Promise<GeneratedImageResult> {
+export async function generateNativeImageReal(prompt: string): Promise<GeneratedImageResult> {
   const traceId = `trace-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   let apiToken = '';
   let accountId = '';
@@ -30,15 +31,11 @@ export async function generateNativeImageReal(prompt: string, width = 1024, heig
     }
   } catch {}
 
-  const envToken = Boolean(apiToken || (typeof process !== 'undefined' && process.env?.CLOUDFLARE_API_TOKEN));
-  const envAccount = Boolean(accountId || (typeof process !== 'undefined' && process.env?.CLOUDFLARE_ACCOUNT_ID));
-
   console.log('[CLOUDFLARE IMAGE DEBUG]', {
     traceId,
-    envToken,
-    envAccount,
     method: 'POST',
     endpoint: '/api/image/generate',
+    model: '@cf/black-forest-labs/flux-1-schnell',
   });
 
   try {
@@ -47,7 +44,11 @@ export async function generateNativeImageReal(prompt: string, width = 1024, heig
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ prompt, width, height, apiToken, accountId }),
+      body: JSON.stringify({
+        prompt: prompt.trim(),
+        apiToken: apiToken ? apiToken.trim() : undefined,
+        accountId: accountId ? accountId.trim() : undefined,
+      }),
     });
 
     const contentType = response.headers.get('content-type') || '';
@@ -67,6 +68,7 @@ export async function generateNativeImageReal(prompt: string, width = 1024, heig
 
       return {
         success: false,
+        artifactType: 'image',
         mimeType: '',
         filename: '',
         error: `Falha ao gerar imagem via Cloudflare Workers AI: ${errText}`,
@@ -77,8 +79,7 @@ export async function generateNativeImageReal(prompt: string, width = 1024, heig
     }
 
     const data = await response.json();
-
-    const imageReceived = Boolean(data.success && data.imageBase64);
+    const imageReceived = Boolean(data.success && data.imageBase64 && data.imageBase64.length > 0);
     const imageBytes = imageReceived ? Math.round((data.imageBase64.length * 3) / 4) : 0;
 
     console.log('[CLOUDFLARE IMAGE DEBUG] Success:', {
@@ -93,25 +94,31 @@ export async function generateNativeImageReal(prompt: string, width = 1024, heig
     if (!imageReceived) {
       return {
         success: false,
+        artifactType: 'image',
         mimeType: '',
         filename: '',
-        error: data.error || 'A geração de imagem não retornou dados binários válidos.',
+        error: data.error || 'A API respondeu com sucesso mas não retornou imagem válida.',
         source: 'generated',
-        provider: data.provider || 'cloudflare',
+        provider: 'cloudflare',
         model: data.model || '@cf/black-forest-labs/flux-1-schnell',
       };
     }
 
     return {
       success: true,
+      artifactType: 'image',
       imageBase64: data.imageBase64,
       mimeType: data.mimeType || 'image/png',
       filename: data.filename || `cloudflare_flux_${Date.now()}.png`,
       source: 'generated',
-      provider: data.provider || 'cloudflare',
+      provider: 'cloudflare',
       model: data.model || '@cf/black-forest-labs/flux-1-schnell',
-      width: data.width || width,
-      height: data.height || height,
+      metadata: data.metadata || {
+        source: 'generated',
+        provider: 'cloudflare',
+        model: '@cf/black-forest-labs/flux-1-schnell',
+        bytes: imageBytes,
+      },
     };
   } catch (err: any) {
     console.error('[CLOUDFLARE IMAGE DEBUG] Exception:', {
@@ -120,6 +127,7 @@ export async function generateNativeImageReal(prompt: string, width = 1024, heig
     });
     return {
       success: false,
+      artifactType: 'image',
       mimeType: '',
       filename: '',
       error: `Erro de conexão ao solicitar geração de imagem: ${err?.message || err}`,

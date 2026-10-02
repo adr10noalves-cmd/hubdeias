@@ -1,10 +1,11 @@
 export interface CloudflareImageResult {
   success: boolean;
+  artifactType: 'image';
   imageBase64?: string;
   mimeType: string;
   filename: string;
   error?: string;
-  provider: string;
+  provider: 'cloudflare';
   model: string;
   width?: number;
   height?: number;
@@ -13,135 +14,135 @@ export interface CloudflareImageResult {
 
 /**
  * Retorna diagnóstico seguro das credenciais server-side da Cloudflare
+ * NUNCA expõe os valores reais das variáveis.
  */
 export function getCloudflareHealthDiagnostics(params?: { accountId?: string; apiToken?: string }) {
-  const accountId = params?.accountId || process.env.CLOUDFLARE_ACCOUNT_ID;
-  const apiToken = params?.apiToken || process.env.CLOUDFLARE_API_TOKEN;
+  const accountId = params?.accountId?.trim() || process.env.CLOUDFLARE_ACCOUNT_ID?.trim();
+  const apiToken = params?.apiToken?.trim() || process.env.CLOUDFLARE_API_TOKEN?.trim();
 
-  const tokenConfigured = Boolean(apiToken && apiToken.trim() !== '');
-  const accountConfigured = Boolean(accountId && accountId.trim() !== '');
+  const tokenConfigured = Boolean(apiToken && apiToken !== '');
+  const accountConfigured = Boolean(accountId && accountId !== '');
   const configured = tokenConfigured && accountConfigured;
 
-  let status = 'READY';
-  if (!configured) {
-    status = 'CONFIG_ERROR';
-  }
+  const status: 'READY' | 'CONFIG_ERROR' = configured ? 'READY' : 'CONFIG_ERROR';
 
   return {
-    configured,
     tokenConfigured,
     accountConfigured,
-    provider: 'cloudflare',
+    provider: 'cloudflare' as const,
     capability: 'GENERATE_IMAGE',
     model: '@cf/black-forest-labs/flux-1-schnell',
-    adapter: true,
     status,
+    configured,
   };
 }
 
 /**
  * Adaptador oficial para Geração de Imagem Nativa via Cloudflare Workers AI
- * Utiliza JSON payload e modelos oficiais (Flux.1 Schnell / SDXL Base 1.0)
+ * Modelo oficial obrigatório: @cf/black-forest-labs/flux-1-schnell
+ * Sem fallback para SVG, Canvas, Unsplash ou placeholders.
  */
 export async function executeCloudflareImage(params: {
   prompt: string;
-  width?: number;
-  height?: number;
   accountId?: string;
   apiToken?: string;
 }): Promise<CloudflareImageResult> {
-  const accountId = params.accountId || process.env.CLOUDFLARE_ACCOUNT_ID;
-  const apiToken = params.apiToken || process.env.CLOUDFLARE_API_TOKEN;
+  const modelId = '@cf/black-forest-labs/flux-1-schnell';
+  const cleanAccount = (params.accountId?.trim() || process.env.CLOUDFLARE_ACCOUNT_ID?.trim()) || '';
+  const cleanToken = (params.apiToken?.trim() || process.env.CLOUDFLARE_API_TOKEN?.trim()) || '';
 
-  if (!accountId || !apiToken || accountId.trim() === '' || apiToken.trim() === '') {
+  if (!cleanAccount || !cleanToken) {
     return {
       success: false,
+      artifactType: 'image',
       mimeType: '',
       filename: '',
-      error: 'As credenciais da Cloudflare Workers AI (CLOUDFLARE_ACCOUNT_ID e CLOUDFLARE_API_TOKEN) não estão configuradas nas variáveis de ambiente da Vercel.',
+      error: 'As credenciais da Cloudflare Workers AI (CLOUDFLARE_ACCOUNT_ID e CLOUDFLARE_API_TOKEN) não estão configuradas no ambiente server-side da Vercel.',
       provider: 'cloudflare',
-      model: '@cf/black-forest-labs/flux-1-schnell',
+      model: modelId,
     };
   }
 
-  const prompt = params.prompt || 'Professional high quality illustration';
-  const width = params.width || 1024;
-  const height = params.height || 1024;
-  const cleanAccount = accountId.trim();
-  const cleanToken = apiToken.trim();
+  const cleanPrompt = (params.prompt || '').trim();
+  if (!cleanPrompt) {
+    return {
+      success: false,
+      artifactType: 'image',
+      mimeType: '',
+      filename: '',
+      error: 'O prompt para geração de imagem não pode estar vazio.',
+      provider: 'cloudflare',
+      model: modelId,
+    };
+  }
 
-  // Lista de modelos para teste em cadeia (caso o primeiro retorne 404/indisponível)
-  const modelsToTry = [
-    '@cf/black-forest-labs/flux-1-schnell',
-    '@cf/stabilityai/stable-diffusion-xl-base-1.0',
-    '@cf/black-forest-labs/flux-2-klein-4b'
-  ];
+  const url = `https://api.cloudflare.com/client/v4/accounts/${cleanAccount}/ai/run/${modelId}`;
 
-  let lastError = '';
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${cleanToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: cleanPrompt,
+      }),
+    });
 
-  for (const modelId of modelsToTry) {
-    const url = `https://api.cloudflare.com/client/v4/accounts/${cleanAccount}/ai/run/${modelId}`;
+    if (!response.ok) {
+      let errText = `HTTP ${response.status}`;
+      try {
+        const errJson = (await response.json()) as any;
+        errText = errJson.errors?.[0]?.message || JSON.stringify(errJson);
+      } catch {
+        errText = await response.text();
+      }
+      return {
+        success: false,
+        artifactType: 'image',
+        mimeType: '',
+        filename: '',
+        error: `Falha na API da Cloudflare Workers AI (${response.status}): ${errText}`,
+        provider: 'cloudflare',
+        model: modelId,
+      };
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+
+    // 1. Resposta em formato binário direto (image/png, image/jpeg ou stream)
+    if (contentType.includes('image/') || contentType.includes('application/octet-stream')) {
+      const buffer = await response.arrayBuffer();
+      const base64 = Buffer.from(buffer).toString('base64');
+      const mime = contentType.includes('image/') ? contentType.split(';')[0] : 'image/png';
+      const ext = mime.includes('jpeg') || mime.includes('jpg') ? 'jpg' : 'png';
+      const filename = `cloudflare_flux_${Date.now()}.${ext}`;
+
+      return {
+        success: true,
+        artifactType: 'image',
+        imageBase64: base64,
+        mimeType: mime,
+        filename,
+        provider: 'cloudflare',
+        model: modelId,
+        metadata: {
+          source: 'generated',
+          prompt: cleanPrompt,
+          model: modelId,
+          bytes: Math.round((base64.length * 3) / 4),
+        },
+      };
+    }
+
+    // 2. Resposta em formato JSON com base64 em result.image
+    const rawText = await response.text();
+    let base64Image = '';
+    let mimeType = 'image/png';
 
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${cleanToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          prompt,
-          width,
-          height,
-        }),
-      });
-
-      if (!response.ok) {
-        let errText = `HTTP ${response.status}`;
-        try {
-          const errJson = (await response.json()) as any;
-          errText = errJson.errors?.[0]?.message || JSON.stringify(errJson);
-        } catch {
-          errText = await response.text();
-        }
-        lastError = `Modelo ${modelId} falhou (${response.status}): ${errText}`;
-        if (response.status === 404 || response.status === 400) {
-          // Tenta próximo modelo da lista
-          continue;
-        }
-        return {
-          success: false,
-          mimeType: '',
-          filename: '',
-          error: lastError,
-          provider: 'cloudflare',
-          model: modelId,
-        };
-      }
-
-      const contentType = response.headers.get('content-type') || '';
-
-      if (contentType.includes('image/') || contentType.includes('application/octet-stream')) {
-        const buffer = await response.arrayBuffer();
-        const base64 = Buffer.from(buffer).toString('base64');
-        const mime = contentType.includes('image/') ? contentType.split(';')[0] : 'image/png';
-        const filename = `cloudflare_${modelId.split('/').pop()}_${Date.now()}.png`;
-
-        return {
-          success: true,
-          imageBase64: base64,
-          mimeType: mime,
-          filename,
-          provider: 'cloudflare',
-          model: modelId,
-          width,
-          height,
-        };
-      }
-
-      const data = (await response.json()) as any;
-
-      let base64Image = '';
+      const data = JSON.parse(rawText);
       if (data?.result?.image) {
         base64Image = data.result.image;
       } else if (typeof data?.result === 'string') {
@@ -149,47 +150,59 @@ export async function executeCloudflareImage(params: {
       } else if (data?.image) {
         base64Image = data.image;
       }
+    } catch {
+      // Se não for JSON, tenta tratar como binário retornado como texto
+      base64Image = Buffer.from(rawText, 'binary').toString('base64');
+    }
 
-      if (!base64Image) {
-        return {
-          success: false,
-          mimeType: '',
-          filename: '',
-          error: `A API da Cloudflare Workers AI (${modelId}) retornou sucesso mas sem dados de imagem válidos.`,
-          provider: 'cloudflare',
-          model: modelId,
-          metadata: data,
-        };
-      }
-
-      if (base64Image.startsWith('data:')) {
-        const parts = base64Image.split(',');
-        base64Image = parts[1] || base64Image;
-      }
-
-      const filename = `cloudflare_${modelId.split('/').pop()}_${Date.now()}.png`;
+    if (!base64Image || base64Image.trim().length === 0) {
       return {
-        success: true,
-        imageBase64: base64Image,
-        mimeType: 'image/png',
-        filename,
+        success: false,
+        artifactType: 'image',
+        mimeType: '',
+        filename: '',
+        error: 'A API da Cloudflare Workers AI respondeu com sucesso mas não retornou bytes de imagem válidos.',
         provider: 'cloudflare',
         model: modelId,
-        width,
-        height,
       };
-    } catch (err: any) {
-      lastError = `Exceção em ${modelId}: ${err?.message || err}`;
-      continue;
     }
-  }
 
-  return {
-    success: false,
-    mimeType: '',
-    filename: '',
-    error: `Falha em todos os modelos testados da Cloudflare Workers AI. Último erro: ${lastError}`,
-    provider: 'cloudflare',
-    model: '@cf/black-forest-labs/flux-1-schnell',
-  };
+    // Normalização de Data URI se necessário
+    if (base64Image.startsWith('data:')) {
+      const match = base64Image.match(/^data:([^;]+);base64,/);
+      if (match && match[1]) {
+        mimeType = match[1];
+      }
+      base64Image = base64Image.replace(/^data:[^;]+;base64,/, '');
+    }
+
+    const ext = mimeType.includes('jpeg') || mimeType.includes('jpg') ? 'jpg' : 'png';
+    const filename = `cloudflare_flux_${Date.now()}.${ext}`;
+
+    return {
+      success: true,
+      artifactType: 'image',
+      imageBase64: base64Image,
+      mimeType,
+      filename,
+      provider: 'cloudflare',
+      model: modelId,
+      metadata: {
+        source: 'generated',
+        prompt: cleanPrompt,
+        model: modelId,
+        bytes: Math.round((base64Image.length * 3) / 4),
+      },
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      artifactType: 'image',
+      mimeType: '',
+      filename: '',
+      error: `Exceção ao chamar Cloudflare Workers AI: ${err?.message || err}`,
+      provider: 'cloudflare',
+      model: modelId,
+    };
+  }
 }

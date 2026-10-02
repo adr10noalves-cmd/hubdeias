@@ -44,6 +44,22 @@ export const UniversalStudioView: React.FC = () => {
     }
   }, []);
 
+  const getImageSrc = (content: string, mimeType = 'image/png') => {
+    if (!content) return '';
+    if (content.startsWith('data:') || content.startsWith('http')) {
+      return content;
+    }
+    if (content.includes('<img')) {
+      const match = content.match(/src=["']([^"']+)["']/);
+      if (match && match[1]) {
+        return match[1].startsWith('data:') || match[1].startsWith('http')
+          ? match[1]
+          : `data:${mimeType};base64,${match[1]}`;
+      }
+    }
+    return `data:${mimeType};base64,${content}`;
+  };
+
   const handleCreateArtifact = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!promptInput.trim() || isGenerating) return;
@@ -54,12 +70,23 @@ export const UniversalStudioView: React.FC = () => {
     setPromptInput('');
 
     try {
-      if (generationType === 'image') {
-        setPipelineStatus('Executando geração visual real via Cloudflare Workers AI...');
+      const lower = text.toLowerCase();
+      const isImageIntent =
+        generationType === 'image' ||
+        lower.startsWith('crie uma imagem') ||
+        lower.startsWith('gere uma imagem') ||
+        lower.startsWith('gerar imagem') ||
+        lower.startsWith('desenhe') ||
+        lower.includes('estilo cinematográfico') ||
+        lower.includes('fotorealista') ||
+        (lower.includes('imagem') && (lower.includes('crie') || lower.includes('gere') || lower.includes('faça')));
+
+      if (isImageIntent) {
+        setPipelineStatus('Executando geração visual real via Cloudflare Workers AI (Flux.1 Schnell)...');
         const imgResult = await runImageGenerationPipeline(text);
 
         if (!imgResult.success || !imgResult.imageBase64) {
-          throw new Error(imgResult.error || 'A geração de imagens por IA falhou na resposta do provider.');
+          throw new Error(imgResult.error || 'A geração de imagens por IA falhou na resposta da Cloudflare.');
         }
 
         const rawBase64 = imgResult.imageBase64.includes(',') ? imgResult.imageBase64.split(',')[1] : imgResult.imageBase64;
@@ -77,8 +104,8 @@ export const UniversalStudioView: React.FC = () => {
           },
           metadata: {
             source: 'generated',
-            provider: imgResult.provider,
-            model: imgResult.model,
+            provider: 'cloudflare',
+            model: imgResult.model || '@cf/black-forest-labs/flux-1-schnell',
             mimeType,
           },
         });
@@ -86,6 +113,7 @@ export const UniversalStudioView: React.FC = () => {
         const updated = getStoredArtifacts();
         setArtifacts(updated);
         setSelectedArtifact(newArtifact);
+        setActiveTab('preview');
       } else {
         setPipelineStatus('Extraindo requisitos e planejando arquitetura do sistema...');
         const res = await fetch('/api/orchestrate', {
@@ -331,7 +359,7 @@ export const UniversalStudioView: React.FC = () => {
                       <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-slate-950 overflow-auto space-y-4">
                         <div className="relative max-w-4xl max-h-[72vh] overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-slate-900 flex items-center justify-center p-2">
                           <img
-                            src={selectedArtifact.content.startsWith('data:') || selectedArtifact.content.startsWith('http') ? selectedArtifact.content : `data:${selectedArtifact.metadata?.mimeType || 'image/png'};base64,${selectedArtifact.content}`}
+                            src={getImageSrc(selectedArtifact.content, selectedArtifact.metadata?.mimeType || 'image/png')}
                             alt={selectedArtifact.title}
                             className="max-w-full max-h-[68vh] object-contain rounded-xl"
                           />

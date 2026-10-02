@@ -130,23 +130,34 @@ app.post('/api/groq/command', async (req, res) => {
   }
 });
 
-// GERAÇÃO REAL DE IMAGENS VIA CLOUDFLARE WORKERS AI (FLUX.2 KLEIN 4B)
+// GERAÇÃO REAL DE IMAGENS VIA CLOUDFLARE WORKERS AI (FLUX.1 SCHNELL)
 app.post('/api/image/generate', async (req, res) => {
-  const { prompt, width, height, accountId, apiToken } = req.body || {};
-  if (!prompt || typeof prompt !== 'string') {
-    res.status(400).json({ success: false, error: 'Parâmetro "prompt" é obrigatório para geração de imagem.' });
+  const { prompt, accountId, apiToken } = req.body || {};
+  if (!prompt || typeof prompt !== 'string' || prompt.trim() === '') {
+    res.status(400).json({
+      success: false,
+      artifactType: 'image',
+      error: 'Parâmetro "prompt" é obrigatório para geração de imagem.',
+      provider: 'cloudflare',
+      model: '@cf/black-forest-labs/flux-1-schnell',
+    });
     return;
   }
   try {
-    const result = await executeCloudflareImage({ prompt, width, height, accountId, apiToken });
+    const result = await executeCloudflareImage({ prompt: prompt.trim(), accountId, apiToken });
+    if (!result.success) {
+      res.status(502).json(result);
+      return;
+    }
     res.json(result);
   } catch (err: any) {
     console.error('[Server /api/image/generate error]:', err);
     res.status(500).json({
       success: false,
-      error: err?.message || 'Erro interno ao gerar imagem.',
+      artifactType: 'image',
+      error: err?.message || 'Erro interno ao gerar imagem na Cloudflare.',
       provider: 'cloudflare',
-      model: '@cf/black-forest-labs/flux-2-klein-4b',
+      model: '@cf/black-forest-labs/flux-1-schnell',
     });
   }
 });

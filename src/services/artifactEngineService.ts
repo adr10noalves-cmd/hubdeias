@@ -70,12 +70,26 @@ export async function exportArtifactAsFile(artifact: ArtifactItem) {
     mime = 'application/json;charset=utf-8';
     ext = 'json';
   } else if (artifact.type === 'image') {
-    mime = artifact.metadata?.mimeType || 'image/png';
-    ext = 'png';
+    let rawContent = artifact.content || '';
+    if (rawContent.includes('<img')) {
+      const match = rawContent.match(/src=["']([^"']+)["']/);
+      if (match && match[1]) rawContent = match[1];
+    }
+    if (rawContent.includes('base64,')) {
+      const parts = rawContent.split('base64,');
+      rawContent = parts[1];
+      const mimeMatch = parts[0].match(/data:([^;]+)/);
+      if (mimeMatch && mimeMatch[1]) {
+        mime = mimeMatch[1];
+      }
+    } else {
+      mime = artifact.metadata?.mimeType || 'image/png';
+    }
+    ext = mime.includes('jpeg') || mime.includes('jpg') ? 'jpg' : 'png';
+
     try {
-      let b64 = artifact.content;
-      if (b64.includes(',')) b64 = b64.split(',')[1];
-      const byteChars = atob(b64);
+      const cleanB64 = rawContent.replace(/[\r\n\s]/g, '');
+      const byteChars = atob(cleanB64);
       const byteNums = new Array(byteChars.length);
       for (let i = 0; i < byteChars.length; i++) {
         byteNums[i] = byteChars.charCodeAt(i);

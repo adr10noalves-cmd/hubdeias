@@ -20,7 +20,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(200).json(diag);
   } catch (err: any) {
     res.status(500).json({
-      configured: false,
+      tokenConfigured: false,
+      accountConfigured: false,
+      provider: 'cloudflare',
+      capability: 'GENERATE_IMAGE',
+      model: '@cf/black-forest-labs/flux-1-schnell',
       status: 'CONFIG_ERROR',
       error: err?.message,
     });

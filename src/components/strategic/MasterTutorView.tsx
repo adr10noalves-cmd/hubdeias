@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import { IdeaItem } from '../../types';
 import { saveIdeaToFirestore } from '../../services/strategicMemoryService';
+import { runImageGenerationPipeline } from '../../services/codeAndImagePipeline';
+import { saveArtifact } from '../../services/artifactEngineService';
 
 interface MasterMessage {
   id: string;
@@ -86,8 +88,67 @@ export const MasterTutorView: React.FC = () => {
     let actionNotice = '';
 
     try {
-      // Intention & Action Detection (e.g. Save Idea)
+      // Intention & Action Detection (e.g. Save Idea or Generate Image)
       const lower = userText.toLowerCase();
+      const isImageIntent =
+        lower.startsWith('crie uma imagem') ||
+        lower.startsWith('gere uma imagem') ||
+        lower.startsWith('gerar imagem') ||
+        lower.startsWith('desenhe') ||
+        lower.includes('estilo cinematográfico') ||
+        lower.includes('fotorealista') ||
+        (lower.includes('imagem') && (lower.includes('crie') || lower.includes('gere') || lower.includes('faça')));
+
+      if (isImageIntent) {
+        const imgResult = await runImageGenerationPipeline(userText);
+        if (imgResult.success && imgResult.imageBase64) {
+          const rawBase64 = imgResult.imageBase64.includes(',') ? imgResult.imageBase64.split(',')[1] : imgResult.imageBase64;
+          const mimeType = imgResult.mimeType || 'image/png';
+          const dataUri = `data:${mimeType};base64,${rawBase64}`;
+          const title = userText.slice(0, 35) + (userText.length > 35 ? '...' : '');
+
+          saveArtifact({
+            title,
+            type: 'image',
+            content: dataUri,
+            origin: 'Mestre Universal (Cloudflare Workers AI)',
+            assets: {
+              [imgResult.filename || 'generated_image.png']: dataUri,
+            },
+            metadata: {
+              source: 'generated',
+              provider: 'cloudflare',
+              model: imgResult.model || '@cf/black-forest-labs/flux-1-schnell',
+              mimeType,
+            },
+          });
+
+          const masterMsg: MasterMessage = {
+            id: `msg-${Date.now()}-m`,
+            sender: 'master',
+            text: `🎨 **Imagem Gerada com Sucesso via Cloudflare Workers AI!**\n\nModelo: \`${imgResult.model}\`\n\n![${title}](${dataUri})\n\n*(Artefato salvo automaticamente no seu **Estúdio Universal** com opções completas de preview e download em alta resolução).*`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            mode: activeMode,
+            actionExecuted: 'Image Generated',
+          };
+          setMessages((prev) => [...prev, masterMsg]);
+          setIsThinking(false);
+          return;
+        } else {
+          const masterMsg: MasterMessage = {
+            id: `msg-${Date.now()}-m`,
+            sender: 'master',
+            text: `⚠️ **Falha na Geração Visual via Cloudflare Workers AI**:\n\n${imgResult.error || 'A API respondeu com erro ao processar a imagem.'}\n\n*Nota: Certifique-se de que as variáveis \`CLOUDFLARE_API_TOKEN\` e \`CLOUDFLARE_ACCOUNT_ID\` estão configuradas na Vercel.*`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            mode: activeMode,
+            actionExecuted: 'Image Failed',
+          };
+          setMessages((prev) => [...prev, masterMsg]);
+          setIsThinking(false);
+          return;
+        }
+      }
+
       if (lower.includes('guarde essa ideia') || lower.includes('salve essa ideia') || lower.includes('salve esta ideia') || lower.includes('guarde esta ideia')) {
         const titleMatch = userText.match(/"([^"]+)"/) || userText.match(/'([^']+)'/);
         const title = titleMatch ? titleMatch[1] : userText.slice(0, 40) + '...';
@@ -310,7 +371,23 @@ Retorne obrigatoriamente um objeto JSON estrito contendo a chave "response" com 
                   <span className="font-bold">{m.sender === 'user' ? 'Você' : `Mestre Universal (${m.mode || activeMode})`}</span>
                   <span>{m.timestamp}</span>
                 </div>
-                <div className="whitespace-pre-wrap">{m.text}</div>
+                {(() => {
+                  const imgMatch = m.text.match(/!\[(.*?)\]\((data:image\/[^;]+;base64,[^)]+)\)/);
+                  if (imgMatch) {
+                    const [fullMatch, alt, dataUri] = imgMatch;
+                    const parts = m.text.split(fullMatch);
+                    return (
+                      <div className="space-y-3">
+                        {parts[0] && <div className="whitespace-pre-wrap">{parts[0]}</div>}
+                        <div className="rounded-xl overflow-hidden border border-slate-700 bg-slate-950 p-2 max-w-md shadow-2xl">
+                          <img src={dataUri} alt={alt || 'Imagem Gerada'} className="rounded-lg max-h-72 w-full object-contain" />
+                        </div>
+                        {parts[1] && <div className="whitespace-pre-wrap">{parts[1]}</div>}
+                      </div>
+                    );
+                  }
+                  return <div className="whitespace-pre-wrap">{m.text}</div>;
+                })()}
               </div>
             </div>
           ))}
