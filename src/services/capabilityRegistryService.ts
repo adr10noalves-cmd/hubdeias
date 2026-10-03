@@ -13,7 +13,8 @@ export type CapabilityType =
   | 'RESEARCH'
   | 'LONG_CONTEXT'
   | 'TOOL_USE'
-  | 'FILE_CREATION';
+  | 'FILE_CREATION'
+  | 'VALIDATE_ARTIFACT';
 
 export interface ModelCapabilityProfile {
   providerName: string;
@@ -97,9 +98,9 @@ export const CAPABILITY_REGISTRY: ModelCapabilityProfile[] = [
     isAvailable: true,
   },
   {
-    providerName: 'HUB_IMAGE_ENGINE',
-    modelId: 'imagen-native',
-    displayName: 'Hub Native Image Engine (Generative Visuals)',
+    providerName: 'CLOUDFLARE',
+    modelId: '@cf/black-forest-labs/flux-1-schnell',
+    displayName: 'Cloudflare Workers AI (Flux.1 Schnell Real)',
     capabilities: ['GENERATE_IMAGE', 'EDIT_IMAGE'],
     maxContextTokens: 4096,
     speedRank: 'Fast',
@@ -107,6 +108,16 @@ export const CAPABILITY_REGISTRY: ModelCapabilityProfile[] = [
     isAvailable: true,
   },
 ];
+
+export interface ArtifactVersion {
+  version: number;
+  content: string;
+  title: string;
+  assets?: Record<string, string>;
+  updatedAt: string;
+  changelog?: string;
+  metadata?: Record<string, any>;
+}
 
 export interface ArtifactItem {
   id: string;
@@ -119,6 +130,7 @@ export interface ArtifactItem {
   updatedAt: string;
   assets?: Record<string, string>; // name -> url / base64
   metadata?: Record<string, any>;
+  history?: ArtifactVersion[];
 }
 
 export function findModelsWithCapability(capability: CapabilityType): ModelCapabilityProfile[] {

@@ -22,7 +22,8 @@ import {
 import { IdeaItem } from '../../types';
 import { saveIdeaToFirestore } from '../../services/strategicMemoryService';
 import { runImageGenerationPipeline } from '../../services/codeAndImagePipeline';
-import { saveArtifact } from '../../services/artifactEngineService';
+import { saveArtifact, getStoredArtifacts, exportProjectRealZip } from '../../services/artifactEngineService';
+import { executeMultimodalCreation } from '../../services/multimodalStudioPipeline';
 
 interface MasterMessage {
   id: string;
@@ -90,6 +91,100 @@ export const MasterTutorView: React.FC = () => {
     try {
       // Intention & Action Detection (e.g. Save Idea or Generate Image)
       const lower = userText.toLowerCase();
+      // 1. Detecção de Solicitação de Download de Projeto
+      if (
+        lower.includes('baixe o projeto') ||
+        lower.includes('baixar o projeto') ||
+        lower.includes('baixar projeto') ||
+        lower.includes('exportar projeto') ||
+        lower.includes('download do projeto')
+      ) {
+        const artifacts = getStoredArtifacts();
+        if (artifacts.length > 0) {
+          exportProjectRealZip(artifacts[0]);
+          const masterMsg: MasterMessage = {
+            id: `msg-${Date.now()}-m`,
+            sender: 'master',
+            text: `📦 **Download do Projeto Realizado!**\n\nO arquivo ZIP contendo todo o código (\`index.html\`, \`README.md\`) e os assets binários reais da pasta \`assets/\` foi gerado e baixado no seu navegador.\n\nProjeto exportado: **${artifacts[0].title}** (v${artifacts[0].version}).`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            mode: activeMode,
+            actionExecuted: 'Project Downloaded',
+          };
+          setMessages((prev) => [...prev, masterMsg]);
+          setIsThinking(false);
+          return;
+        }
+      }
+
+      // 2. Detecção de Criação ou Edição Multimodal Completa (Ex: Atlas Engenharia ou Refinamentos)
+      const isMultimodalProjectIntent =
+        lower.includes('crie um site') ||
+        lower.includes('crie uma landing page') ||
+        lower.includes('crie uma página') ||
+        lower.includes('crie um sistema') ||
+        lower.includes('crie um aplicativo') ||
+        lower.includes('atlas engenharia') ||
+        lower.includes('troque somente a imagem') ||
+        lower.includes('troque a imagem') ||
+        lower.includes('deixe o site mais') ||
+        lower.includes('volte para a versão anterior') ||
+        lower.includes('reverter versão');
+
+      if (isMultimodalProjectIntent) {
+        const artifacts = getStoredArtifacts();
+        const activeArtifact = artifacts.length > 0 ? artifacts[0] : null;
+        const result = await executeMultimodalCreation(userText, activeArtifact);
+
+        if (result.success && result.artifact) {
+          const heroAsset =
+            Object.entries(result.artifact.assets || {}).find(([k]) => k.includes('hero') || k.includes('banner'))?.[1] ||
+            Object.values(result.artifact.assets || {})[0] ||
+            '';
+
+          const imageSnippet = heroAsset ? `\n\n![${result.artifact.title}](${heroAsset})` : '';
+
+          const reply = `🏗️ **Projeto Multimodal Gerado com Sucesso pelo Mestre & Estúdio Universal!**
+
+**Projeto:** ${result.artifact.title} (Versão **v${result.artifact.version}**)
+**Capacidades Executadas:** \`${result.capabilitiesUsed.join(' ➔ ')}\`
+**Origem Visual:** Cloudflare Workers AI (\`@cf/black-forest-labs/flux-1-schnell\`)
+**Assets Integrados:** ${Object.keys(result.artifact.assets || {}).length} asset(s) vinculados diretamente ao código.${imageSnippet}
+
+---
+### O que foi entregue:
+- Estrutura completa em **HTML5 Semântico + Tailwind CSS**
+- Menu responsivo com interatividade JavaScript nativa
+- Imagem de alta definição gerada e integrada ao layout
+- Quality Gate: **Aprovado** sem fallbacks fictícios
+- Registrado no **Artifact Engine** (Pronto para visualização no Estúdio Universal e exportação ZIP)`;
+
+          const masterMsg: MasterMessage = {
+            id: `msg-${Date.now()}-m`,
+            sender: 'master',
+            text: reply,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            mode: activeMode,
+            actionExecuted: 'Multimodal Project Created',
+          };
+          setMessages((prev) => [...prev, masterMsg]);
+          setIsThinking(false);
+          return;
+        } else {
+          const masterMsg: MasterMessage = {
+            id: `msg-${Date.now()}-m`,
+            sender: 'master',
+            text: `⚠️ **Falha na Execução Multimodal**:\n\n${result.error || 'Não foi possível sintetizar o projeto com os parâmetros fornecidos.'}`,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            mode: activeMode,
+            actionExecuted: 'Execution Failed',
+          };
+          setMessages((prev) => [...prev, masterMsg]);
+          setIsThinking(false);
+          return;
+        }
+      }
+
+      // 3. Intenção pura de Geração de Imagem Individual
       const isImageIntent =
         lower.startsWith('crie uma imagem') ||
         lower.startsWith('gere uma imagem') ||

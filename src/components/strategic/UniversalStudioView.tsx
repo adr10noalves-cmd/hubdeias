@@ -13,26 +13,30 @@ import {
   FileText,
   Trash2,
   AlertTriangle,
+  History,
+  RotateCcw,
+  Send,
+  Wand2,
 } from 'lucide-react';
 import {
   ArtifactItem,
   getStoredArtifacts,
   saveArtifact,
   exportArtifactAsFile,
-  exportProjectZipSimulation,
+  exportProjectRealZip,
+  revertArtifactToPreviousVersion,
 } from '../../services/artifactEngineService';
 import {
-  runCodeCreationPipeline,
-  runImageGenerationPipeline,
-} from '../../services/codeAndImagePipeline';
+  executeMultimodalCreation,
+} from '../../services/multimodalStudioPipeline';
 
 export const UniversalStudioView: React.FC = () => {
   const [artifacts, setArtifacts] = useState<ArtifactItem[]>([]);
   const [selectedArtifact, setSelectedArtifact] = useState<ArtifactItem | null>(null);
-  const [activeTab, setActiveTab] = useState<'preview' | 'code' | 'assets'>('preview');
+  const [activeTab, setActiveTab] = useState<'preview' | 'code' | 'assets' | 'versions'>('preview');
   const [isGenerating, setIsGenerating] = useState(false);
   const [promptInput, setPromptInput] = useState('');
-  const [generationType, setGenerationType] = useState<'html' | 'image' | 'code'>('html');
+  const [conversationalInput, setConversationalInput] = useState('');
   const [pipelineStatus, setPipelineStatus] = useState<string>('');
   const [generationError, setGenerationError] = useState<string | null>(null);
 
@@ -60,106 +64,35 @@ export const UniversalStudioView: React.FC = () => {
     return `data:${mimeType};base64,${content}`;
   };
 
-  const handleCreateArtifact = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!promptInput.trim() || isGenerating) return;
+  const handleCreateOrRefine = async (textToProcess: string, isConversational = false) => {
+    if (!textToProcess.trim() || isGenerating) return;
 
     setIsGenerating(true);
     setGenerationError(null);
-    const text = promptInput.trim();
-    setPromptInput('');
+    const text = textToProcess.trim();
+    if (isConversational) {
+      setConversationalInput('');
+    } else {
+      setPromptInput('');
+    }
 
     try {
-      const lower = text.toLowerCase();
-      const isImageIntent =
-        generationType === 'image' ||
-        lower.startsWith('crie uma imagem') ||
-        lower.startsWith('gere uma imagem') ||
-        lower.startsWith('gerar imagem') ||
-        lower.startsWith('desenhe') ||
-        lower.includes('estilo cinematográfico') ||
-        lower.includes('fotorealista') ||
-        (lower.includes('imagem') && (lower.includes('crie') || lower.includes('gere') || lower.includes('faça')));
+      const targetArtifact = isConversational ? selectedArtifact : null;
+      const result = await executeMultimodalCreation(text, targetArtifact, (step) => {
+        setPipelineStatus(step);
+      });
 
-      if (isImageIntent) {
-        setPipelineStatus('Executando geração visual real via Cloudflare Workers AI (Flux.1 Schnell)...');
-        const imgResult = await runImageGenerationPipeline(text);
-
-        if (!imgResult.success || !imgResult.imageBase64) {
-          throw new Error(imgResult.error || 'A geração de imagens por IA falhou na resposta da Cloudflare.');
-        }
-
-        const rawBase64 = imgResult.imageBase64.includes(',') ? imgResult.imageBase64.split(',')[1] : imgResult.imageBase64;
-        const mimeType = imgResult.mimeType || 'image/png';
-        const dataUri = `data:${mimeType};base64,${rawBase64}`;
-
-        const title = text.slice(0, 30) + (text.length > 30 ? '...' : '');
-        const newArtifact = saveArtifact({
-          title,
-          type: 'image',
-          content: dataUri,
-          origin: 'Estúdio Universal (Cloudflare Workers AI)',
-          assets: {
-            [imgResult.filename || 'generated_image.png']: dataUri,
-          },
-          metadata: {
-            source: 'generated',
-            provider: 'cloudflare',
-            model: imgResult.model || '@cf/black-forest-labs/flux-1-schnell',
-            mimeType,
-          },
-        });
-
-        const updated = getStoredArtifacts();
-        setArtifacts(updated);
-        setSelectedArtifact(newArtifact);
-        setActiveTab('preview');
-      } else {
-        setPipelineStatus('Extraindo requisitos e planejando arquitetura do sistema...');
-        const res = await fetch('/api/orchestrate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            provider: 'GEMINI',
-            modelId: 'gemini-3.8-flash',
-            systemPrompt: `Você é o Arquiteto Chefe do Estúdio Universal. Crie um sistema funcional completo em HTML/CSS/Tailwind e JavaScript com persistência local (localStorage), dashboards interativos, cadastros, formulários funcionais, filtros e navegação completa.`,
-            userPrompt: text,
-            complexityLevel: 5,
-          }),
-        });
-
-        const raw = await res.json();
-        let rawContent = '';
-        if (raw.success && raw.data) {
-          rawContent = typeof raw.data === 'string' ? raw.data : raw.data.response || raw.text || JSON.stringify(raw.data);
-        } else {
-          rawContent = raw.text || `<h1>${text}</h1>`;
-        }
-
-        setPipelineStatus('Executando Revisor de Código e Quality Gate...');
-        const pipelineRes = runCodeCreationPipeline(rawContent, text);
-
-        const title = text.slice(0, 30) + (text.length > 30 ? '...' : '');
-        const newArtifact = saveArtifact({
-          title,
-          type: generationType,
-          content: pipelineRes.code,
-          origin: 'Estúdio Universal (Code Pipeline)',
-          assets: {},
-          metadata: {
-            qualityGatePassed: pipelineRes.qualityGatePassed,
-            issuesFound: pipelineRes.issuesFound,
-            source: 'generated',
-          },
-        });
-
-        const updated = getStoredArtifacts();
-        setArtifacts(updated);
-        setSelectedArtifact(newArtifact);
+      if (!result.success || !result.artifact) {
+        throw new Error(result.error || 'Falha ao processar solicitação no Estúdio Universal.');
       }
+
+      const updatedAll = getStoredArtifacts();
+      setArtifacts(updatedAll);
+      setSelectedArtifact(result.artifact);
+      setActiveTab('preview');
     } catch (err: any) {
       console.error(err);
-      setGenerationError(err?.message || 'A geração de imagens por IA ainda não está disponível nesta configuração.');
+      setGenerationError(err?.message || 'Erro ao executar pipeline do Estúdio Universal.');
     } finally {
       setIsGenerating(false);
       setPipelineStatus('');
@@ -173,10 +106,18 @@ export const UniversalStudioView: React.FC = () => {
 
   const handleDownloadZip = () => {
     if (!selectedArtifact) return;
-    exportProjectZipSimulation(selectedArtifact.title, {
-      'index.html': selectedArtifact.content,
-      'README.md': `# ${selectedArtifact.title}\nGerado via Estúdio Universal em ${selectedArtifact.createdAt}`,
-    });
+    exportProjectRealZip(selectedArtifact);
+  };
+
+  const handleRollback = () => {
+    if (!selectedArtifact) return;
+    const restored = revertArtifactToPreviousVersion(selectedArtifact.id);
+    if (restored) {
+      const updatedAll = getStoredArtifacts();
+      setArtifacts(updatedAll);
+      setSelectedArtifact(restored);
+      setActiveTab('preview');
+    }
   };
 
   return (
@@ -192,12 +133,15 @@ export const UniversalStudioView: React.FC = () => {
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-purple-900 text-purple-300 border border-purple-700 uppercase tracking-widest">
-                  Estúdio Universal — Sem Simulação Visual Falsa
+                  Estúdio Universal Multimodal 2.0
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-900/60 text-emerald-300 border border-emerald-700/60">
+                  Workers AI Flux.1 + Gemini + Code Engine
                 </span>
               </div>
-              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Estúdio de Criação Avançada</h1>
+              <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">Estúdio de Criação Multimodal</h1>
               <p className="text-slate-400 text-xs sm:text-sm max-w-2xl leading-relaxed">
-                Criação de sistemas e páginas funcionais. Geração visual por IA raster nativa reporta indisponibilidade em vez de simular SVGs ou stock externo.
+                Crie projetos web completos combinando raciocínio, geração de código responsivo e imagens originais reais em alta definição com exportação ZIP autêntica.
               </p>
             </div>
           </div>
@@ -214,23 +158,24 @@ export const UniversalStudioView: React.FC = () => {
         </div>
       </div>
 
-      {/* Creation Bar */}
-      <form onSubmit={handleCreateArtifact} className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col md:flex-row gap-3 items-center">
-        <select
-          value={generationType}
-          onChange={(e) => setGenerationType(e.target.value as any)}
-          className="bg-slate-950 border border-slate-700 rounded-xl px-3 py-3 text-xs font-bold text-slate-200 focus:outline-none focus:border-purple-500 shrink-0"
-        >
-          <option value="html">Sistema / Página HTML</option>
-          <option value="image">Imagem por IA (GENERATE_IMAGE)</option>
-          <option value="code">Código Aplicativo</option>
-        </select>
+      {/* Main Creation Bar */}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          handleCreateOrRefine(promptInput, false);
+        }}
+        className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col md:flex-row gap-3 items-center"
+      >
+        <div className="flex items-center gap-2 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-purple-300 text-xs font-bold shrink-0">
+          <Wand2 className="w-4 h-4 text-purple-400" />
+          <span>Multimodal Automático</span>
+        </div>
 
         <input
           type="text"
           value={promptInput}
           onChange={(e) => setPromptInput(e.target.value)}
-          placeholder={`Ex: "Crie um cachorro herói" ou "Crie um sistema de inspeções"`}
+          placeholder={`Ex: "Crie um site profissional para uma construtora chamada Atlas Engenharia com imagem original"`}
           className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none focus:border-purple-500"
         />
 
@@ -255,7 +200,7 @@ export const UniversalStudioView: React.FC = () => {
         <div className="bg-amber-950/40 border border-amber-500/40 rounded-xl p-4 text-xs text-amber-200 flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
           <div className="space-y-1">
-            <span className="font-bold text-amber-300 uppercase tracking-wide">Aviso do Sistema (Geração de Imagem Indisponível)</span>
+            <span className="font-bold text-amber-300 uppercase tracking-wide">Aviso de Execução</span>
             <p className="leading-relaxed">{generationError}</p>
           </div>
         </div>
@@ -264,15 +209,15 @@ export const UniversalStudioView: React.FC = () => {
       {/* Workspace Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Artifacts List */}
-        <div className="lg:col-span-4 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3 h-[600px] overflow-y-auto scrollbar-thin">
+        <div className="lg:col-span-4 bg-slate-900/90 border border-slate-800 rounded-2xl p-4 shadow-xl space-y-3 h-[680px] overflow-y-auto scrollbar-thin">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Artefatos Gerados</span>
+            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Artefatos do Estúdio</span>
             <span className="text-xs px-2 py-0.5 rounded-md bg-purple-950 text-purple-300 border border-purple-800">{artifacts.length}</span>
           </div>
 
           {artifacts.length === 0 ? (
-            <div className="text-center py-12 text-slate-500 text-xs">
-              Nenhum artefato criado ainda. Use a barra acima para gerar um sistema ou página.
+            <div className="text-center py-16 text-slate-500 text-xs">
+              Nenhum artefato criado ainda. Use a barra acima para gerar um projeto completo.
             </div>
           ) : (
             artifacts.map((art) => (
@@ -292,7 +237,9 @@ export const UniversalStudioView: React.FC = () => {
                 <div className="font-semibold text-white text-xs sm:text-sm truncate">{art.title}</div>
                 <div className="flex items-center justify-between text-[10px] text-slate-400">
                   <span>{new Date(art.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                  <span className="text-purple-400 font-mono">v{art.version}</span>
+                  <span className="text-purple-400 font-mono">
+                    {Object.keys(art.assets || {}).length > 0 ? `${Object.keys(art.assets || {}).length} assets` : 'Código puro'}
+                  </span>
                 </div>
               </div>
             ))
@@ -300,14 +247,16 @@ export const UniversalStudioView: React.FC = () => {
         </div>
 
         {/* Artifact Viewer / Studio */}
-        <div className="lg:col-span-8 bg-slate-900/90 border border-slate-800 rounded-2xl shadow-xl flex flex-col h-[600px] overflow-hidden">
+        <div className="lg:col-span-8 bg-slate-900/90 border border-slate-800 rounded-2xl shadow-xl flex flex-col h-[680px] overflow-hidden">
           {selectedArtifact ? (
             <>
               {/* Viewer Header */}
               <div className="px-5 py-3.5 border-b border-slate-800 bg-slate-950/80 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <span className="font-bold text-white text-sm">{selectedArtifact.title}</span>
-                  <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">Versão {selectedArtifact.version}</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-800 font-mono">
+                    Versão {selectedArtifact.version}
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-1.5">
@@ -325,7 +274,7 @@ export const UniversalStudioView: React.FC = () => {
                       activeTab === 'code' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                     }`}
                   >
-                    Código / Conteúdo
+                    Código / Arquivos
                   </button>
                   <button
                     onClick={() => setActiveTab('assets')}
@@ -334,6 +283,15 @@ export const UniversalStudioView: React.FC = () => {
                     }`}
                   >
                     Assets ({Object.keys(selectedArtifact.assets || {}).length})
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('versions')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                      activeTab === 'versions' ? 'bg-purple-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                    }`}
+                  >
+                    <History className="w-3.5 h-3.5" />
+                    <span>Versões ({(selectedArtifact.history?.length || 0) + 1})</span>
                   </button>
 
                   <button
@@ -346,36 +304,33 @@ export const UniversalStudioView: React.FC = () => {
               </div>
 
               {/* Viewer Content */}
-              <div className="flex-1 overflow-hidden bg-slate-950 flex flex-col">
+              <div className="flex-1 overflow-hidden bg-slate-950 flex flex-col relative">
                 {activeTab === 'preview' && (
                   <div className="flex-1 bg-white relative overflow-auto">
-                    {selectedArtifact.type === 'html' ? (
+                    {selectedArtifact.type === 'image' ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-slate-950 overflow-auto space-y-4">
+                        <div className="relative max-w-4xl max-h-[62vh] overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-slate-900 flex items-center justify-center p-2">
+                          <img
+                            src={getImageSrc(selectedArtifact.content, selectedArtifact.metadata?.mimeType || 'image/png')}
+                            alt={selectedArtifact.title}
+                            className="max-w-full max-h-[58vh] object-contain rounded-xl"
+                          />
+                        </div>
+                        <div className="text-xs text-slate-400 flex items-center gap-3">
+                          <span className="px-2.5 py-1 rounded-lg bg-purple-950/60 text-purple-300 border border-purple-800/60 font-mono">
+                            Provider: {selectedArtifact.metadata?.provider || 'cloudflare'}
+                          </span>
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-slate-300 font-mono border border-slate-800">
+                            Model: {selectedArtifact.metadata?.model || 'flux-1-schnell'}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
                       <iframe
                         srcDoc={selectedArtifact.content}
                         title={selectedArtifact.title}
                         className="w-full h-full border-0"
                       />
-                    ) : selectedArtifact.type === 'image' ? (
-                      <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-slate-950 overflow-auto space-y-4">
-                        <div className="relative max-w-4xl max-h-[72vh] overflow-hidden rounded-2xl shadow-2xl border border-slate-800 bg-slate-900 flex items-center justify-center p-2">
-                          <img
-                            src={getImageSrc(selectedArtifact.content, selectedArtifact.metadata?.mimeType || 'image/png')}
-                            alt={selectedArtifact.title}
-                            className="max-w-full max-h-[68vh] object-contain rounded-xl"
-                          />
-                        </div>
-                        <div className="text-xs text-slate-400 flex items-center gap-3">
-                          <span className="px-2.5 py-1 rounded-lg bg-purple-950/60 text-purple-300 border border-purple-800/60 font-mono">Provider: {selectedArtifact.metadata?.provider || 'cloudflare'}</span>
-                          <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-slate-300 font-mono border border-slate-800">Model: {selectedArtifact.metadata?.model || 'flux-1-schnell'}</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="p-8 text-slate-950 space-y-4 bg-slate-950 text-slate-100 min-h-full">
-                        <h2 className="text-xl font-bold">{selectedArtifact.title}</h2>
-                        <div className="p-4 bg-slate-900 rounded-xl whitespace-pre-wrap text-xs font-mono border border-slate-800">
-                          {selectedArtifact.content}
-                        </div>
-                      </div>
                     )}
                   </div>
                 )}
@@ -388,20 +343,122 @@ export const UniversalStudioView: React.FC = () => {
 
                 {activeTab === 'assets' && (
                   <div className="flex-1 p-6 overflow-auto space-y-4 text-slate-200">
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Assets Vinculados</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {Object.entries(selectedArtifact.assets || {}).map(([name, assetUrl]) => {
-                        const urlStr = assetUrl as string;
-                        return (
-                          <div key={name} className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
-                            <div className="text-xs font-bold text-purple-300">{name}</div>
-                            <div className="p-3 bg-slate-950 rounded text-xs font-mono text-slate-400 truncate">{urlStr}</div>
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Assets Vinculados ao Projeto</h3>
+                    {Object.keys(selectedArtifact.assets || {}).length === 0 ? (
+                      <div className="p-8 text-center text-slate-500 text-xs">Nenhum asset binário registrado neste artefato.</div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {Object.entries(selectedArtifact.assets || {}).map(([name, assetUrl]) => {
+                          const urlStr = assetUrl as string;
+                          return (
+                            <div key={name} className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-3">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-purple-300 font-mono">{name}</span>
+                                <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
+                                  Gerado via Flux.1
+                                </span>
+                              </div>
+                              <div className="h-40 rounded-lg overflow-hidden border border-slate-800 bg-slate-950 flex items-center justify-center">
+                                <img src={urlStr} alt={name} className="w-full h-full object-cover" />
+                              </div>
+                              <div className="text-[10px] text-slate-400 truncate font-mono">
+                                Tamanho estimado: ~{Math.round((urlStr.length * 3) / 4 / 1024)} KB
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {activeTab === 'versions' && (
+                  <div className="flex-1 p-6 overflow-auto space-y-4 text-slate-200">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Histórico de Versões e Reversão</h3>
+                      <button
+                        onClick={handleRollback}
+                        disabled={!selectedArtifact.history || selectedArtifact.history.length === 0}
+                        className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white text-xs font-bold flex items-center gap-1.5 transition-all"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" /> Reverter para Versão Anterior
+                      </button>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="p-4 rounded-xl bg-purple-950/30 border border-purple-500/40 space-y-1">
+                        <div className="flex items-center justify-between text-xs font-bold text-purple-300">
+                          <span>Versão Atual: v{selectedArtifact.version}</span>
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-purple-900 text-purple-200">Ativa no Preview</span>
+                        </div>
+                        <p className="text-xs text-slate-300">{selectedArtifact.title}</p>
+                        <span className="text-[10px] text-slate-400">Atualizado em: {new Date(selectedArtifact.updatedAt).toLocaleString()}</span>
+                      </div>
+
+                      {(selectedArtifact.history || []).map((hist, idx) => (
+                        <div key={idx} className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                          <div className="flex items-center justify-between text-xs font-bold text-slate-300">
+                            <span>Versão Anterior: v{hist.version}</span>
+                            <span className="text-[10px] text-slate-500">{new Date(hist.updatedAt).toLocaleString()}</span>
                           </div>
-                        );
-                      })}
+                          <p className="text-xs text-slate-400">{hist.title}</p>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Conversational Refinement Bar */}
+              <div className="p-3 border-t border-slate-800 bg-slate-950/90 flex flex-col gap-2">
+                <div className="flex items-center gap-2 overflow-x-auto pb-1 text-[11px] text-slate-400">
+                  <span className="font-bold text-purple-400 shrink-0">Ações Rápidas:</span>
+                  <button
+                    onClick={() => handleCreateOrRefine('Troque somente a imagem principal.', true)}
+                    disabled={isGenerating}
+                    className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 hover:border-purple-500 text-slate-300 hover:text-white transition-all shrink-0 cursor-pointer"
+                  >
+                    🎨 Trocar Imagem Principal
+                  </button>
+                  <button
+                    onClick={() => handleCreateOrRefine('Deixe o site mais sofisticado com design escuro moderno.', true)}
+                    disabled={isGenerating}
+                    className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 hover:border-purple-500 text-slate-300 hover:text-white transition-all shrink-0 cursor-pointer"
+                  >
+                    ✨ Deixar mais Sofisticado
+                  </button>
+                  <button
+                    onClick={() => handleCreateOrRefine('Volte para a versão anterior.', true)}
+                    disabled={isGenerating || !selectedArtifact.history || selectedArtifact.history.length === 0}
+                    className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 hover:border-indigo-500 text-slate-300 hover:text-white disabled:opacity-40 transition-all shrink-0 cursor-pointer"
+                  >
+                    ↩️ Voltar para Versão Anterior
+                  </button>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleCreateOrRefine(conversationalInput, true);
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <input
+                    type="text"
+                    value={conversationalInput}
+                    onChange={(e) => setConversationalInput(e.target.value)}
+                    placeholder={`Refinar este projeto (Ex: "Adicione depoimentos", "Troque a cor de destaque para dourado")...`}
+                    className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-purple-500"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!conversationalInput.trim() || isGenerating}
+                    className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-purple-500/20 cursor-pointer"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>Refinar</span>
+                  </button>
+                </form>
               </div>
             </>
           ) : (
